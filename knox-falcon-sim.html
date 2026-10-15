@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knox Falcon — F-16 Simülasyon · FE 0.5.6 · Telemetry v1</title>
+<style>
+:root{
+  --bg:#040806; --panel:#071009; --line:#1d3a24; --green:#9eff3d; --dim:#5c8f4a;
+  --amber:#ffb000; --red:#ff4d4d; --white:#c9d6cf; --cyan:#7fd8ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--white);
+  font-family:"IBM Plex Mono","Cascadia Mono",Consolas,"Courier New",monospace;font-size:13px;overflow:hidden}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.10) 0 1px,transparent 1px 3px)}
+header{display:flex;align-items:center;gap:12px;padding:7px 14px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#0a140b,#050a07)}
+header h1{font-size:14px;letter-spacing:.14em;margin:0;color:var(--green);white-space:nowrap}
+header .schema{color:var(--dim);font-size:10px;letter-spacing:.06em;white-space:nowrap}
+header .spacer{flex:1}
+.btn{background:#0b1a0e;border:1px solid var(--line);color:var(--white);padding:4px 10px;cursor:pointer;
+  font-family:inherit;font-size:11px;letter-spacing:.05em;border-radius:2px;transition:background .12s,border-color .12s;white-space:nowrap}
+.btn:hover{background:#123018;border-color:#2e5c38}
+.btn.primary{border-color:#3f7f28;color:var(--green)}
+.btn.warn{border-color:#7a5a10;color:var(--amber)}
+.btn.danger{border-color:#7a2020;color:var(--red)}
+.btn.active{background:#1c3a1c;color:var(--green);border-color:#4a9a3a}
+.btn:disabled{opacity:.35;cursor:default}
+main{display:flex;height:calc(100% - 42px)}
+#left{width:270px;min-width:270px;border-right:1px solid var(--line);padding:10px;overflow:auto;background:var(--panel)}
+#right{width:320px;min-width:320px;border-left:1px solid var(--line);padding:10px;overflow:auto;background:var(--panel)}
+#center{flex:1;display:flex;flex-direction:column;min-width:0}
+.sect{margin-bottom:12px}
+.cap{font-size:9.5px;letter-spacing:.2em;color:var(--dim);border-bottom:1px solid var(--line);
+  padding-bottom:3px;margin-bottom:6px;display:flex;justify-content:space-between}
+.cap b{color:var(--green);font-weight:600}
+.row{display:flex;gap:6px;margin-bottom:6px}.row>*{flex:1;min-width:0}
+input[type=range]{width:100%;accent-color:var(--green)}
+.kval{display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;font-size:11px}
+.kval .k{color:var(--dim)}
+.kkey{color:var(--cyan);opacity:.8;text-align:right}
+#centerTop{font-size:11px;color:var(--dim);padding:3px 12px;letter-spacing:.08em}
+#dashwrap{flex:1;min-height:0;display:grid;place-items:center;padding:4px 12px 8px;
+  background:radial-gradient(ellipse at 50% 42%,#0a150c 0%,var(--bg) 72%)}
+#sceneWrap{position:relative;height:42%;min-height:230px;background:#050a10;border-bottom:1px solid var(--line)}
+canvas#scene{width:100%;height:100%;display:block}
+#btnView{position:absolute;top:8px;right:10px;z-index:6;opacity:.85}
+canvas#dash{background:#020402;border:1px solid var(--line)}
+#hudbar{border-top:1px solid var(--line);padding:4px 12px;font-size:11.5px;color:var(--green);
+  white-space:pre;line-height:1.45;overflow:auto;background:#050b07}
+#statusbar{border-top:1px solid var(--line);padding:4px 12px;font-size:12px;letter-spacing:.08em;background:#0a0d05}
+#logList{max-height:96px;overflow:auto;font-size:10.5px;padding:0 12px 8px;color:var(--dim)}
+#logList div{border-top:1px dotted #12290f;padding:2px 0}
+#logList .am{color:var(--amber)}#logList .rd{color:var(--red)}#logList .gn{color:var(--green)}
+table#tele{width:100%;font-size:10px;border-collapse:collapse}
+table#tele td{padding:1px 4px;border-bottom:1px dotted #16321a;white-space:nowrap}
+table#tele td.n{text-align:right;color:var(--green);font-variant-numeric:tabular-nums}
+table#tele td.k{color:var(--dim)}
+table#tele tr:nth-child(odd){background:#081109}
+table#tele td.hl{color:var(--amber)!important}
+fieldset{border:1px solid var(--line);margin:0 0 8px;padding:6px 8px 8px}
+legend{font-size:9.5px;letter-spacing:.18em;color:var(--dim);padding:0 5px}
+label.opt{display:flex;gap:6px;align-items:center;font-size:11px;margin:3px 0}
+label.opt small{color:var(--dim);margin-left:auto;font-size:9.5px}
+select,input[type=number]{background:#0b1a0e;color:var(--green);border:1px solid var(--line);
+  font-family:inherit;font-size:11px;padding:2px 4px}
+.note{color:var(--dim);font-size:10px;margin-top:2px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.74);display:none;z-index:200;place-items:center}
+.modal.open{display:grid}
+.dialog{background:#071009;border:1px solid #2e5c38;box-shadow:0 0 70px rgba(90,255,130,.07);
+  width:min(1140px,95vw);max-height:93vh;overflow:auto;padding:14px}
+.dialog h2{margin:0 0 2px;font-size:14px;color:var(--green);letter-spacing:.12em}
+.dialog .sub{color:var(--dim);font-size:10.5px;margin-bottom:10px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.stat{border:1px solid var(--line);background:#060d07;padding:7px 9px}
+.stat .l{font-size:9.5px;color:var(--dim);letter-spacing:.12em}
+.stat .v{font-size:16px;color:var(--green);margin-top:2px}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.charts figure{margin:0;border:1px solid var(--line);background:#060d07;padding:6px}
+.charts figcaption{font-size:10px;color:var(--dim);letter-spacing:.1em;margin-bottom:4px;display:flex;justify-content:space-between}
+.charts canvas{width:100%;height:118px;display:block}
+.closeRow{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+table.parts{width:100%;font-size:11.5px;border-collapse:collapse}
+table.parts td,table.parts th{padding:3px 8px;border-bottom:1px dotted #16321a;text-align:left;cursor:pointer}
+table.parts th{color:var(--dim);font-size:9.5px;letter-spacing:.15em;cursor:default}
+table.parts tr.sel{background:#123018;color:var(--green)}
+table.parts td.cond{text-align:right;color:var(--green)}
+table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
+</style>
+</head>
+<body>
+<header>
+  <h1>KNOX FALCON / F-16</h1>
+  <span class="schema">FLIGHT ENGINE 0.5.6 · TELEMETRY SCHEMA v1 · KnoxFalcon 0.2 / MCK-Aviation sim</span>
+  <span class="spacer"></span>
+  <button class="btn" id="btnRecord">● KAYIT (T)</button>
+  <button class="btn" id="btnExpJSON">JSON</button>
+  <button class="btn" id="btnExpCSV">CSV</button>
+  <button class="btn primary" id="btnAnalysis" title="Grafikler + uçuş özeti (Z)">ANALİZ ▸</button>
+  <button class="btn" id="btnService">SERVİS</button>
+  <button class="btn" id="btnReset">RST</button>
+</header>
+<main>
+  <section id="left">
+    <div class="sect">
+      <div class="cap">TEKNİK / SİSTEM <b id="capPhase">PARKED</b></div>
+      <div class="kval">
+        <span class="k">ENGINE</span><span></span><span id="qEng" style="color:var(--amber)">OFF</span>
+        <span class="k">RPM %</span><span></span><span id="qRpm" style="color:var(--green)">000</span>
+        <span class="k">THR %</span><span></span><span id="qThr" style="color:var(--green)">000</span>
+        <span class="k">AB %</span><span></span><span id="qAb" style="color:var(--amber)">000</span>
+        <span class="k">FUEL L</span><span></span><span id="qFuel" style="color:var(--green)">300.0</span>
+        <span class="k">FLOW</span><span></span><span id="qFlow" style="color:var(--green)">0</span>
+        <span class="k">CANOPY</span><span></span><span id="qCan" style="color:var(--green)">CLOSED</span>
+        <span class="k">ARM</span><span></span><span id="qArm" style="color:var(--amber)">SAFE</span>
+      </div>
+    </div>
+    <div class="sect">
+      <div class="cap">İTKİ GAZI <b id="thrVal">%00</b></div>
+      <input type="range" id="thr" min="0" max="100" value="35" step="1">
+      <div class="row" style="margin-top:4px">
+        <button class="btn" id="btnIdle">%0</button>
+        <button class="btn" id="btnCruise">%70</button>
+        <button class="btn" id="btnMil">%100</button>
+        <button class="btn warn" id="btnAfterburner" title="Basılı tut veya Shift + gaz>%50">AB</button>
+      </div>
+    </div>
+    <div class="sect">
+      <div class="cap">SİLAH / KONTROL</div>
+      <div class="row">
+        <button class="btn warn" id="btnArm">ARM (G)</button>
+        <button class="btn warn" id="btnCannon">M61 ←(Space)</button>
+      </div>
+      <div class="row">
+        <button class="btn warn" id="btnRocket">ROKET (R)</button>
+        <button class="btn warn" id="btnFlare">FLARE (F)</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnEngine">MOTOR ON/OFF (I)</button>
+        <button class="btn" id="btnCanopy">CANOPY (C)</button>
+      </div>
+      <div class="row">
+        <button class="btn danger" id="btnBrake">FREN (B)</button>
+        <button class="btn" id="btnPark">PARK</button>
+      </div>
+      <div class="kval" style="margin-top:4px">
+        <span class="k">M61</span><span></span><span id="qGun">600 / 600</span>
+        <span class="k">ROKET</span><span></span><span id="qRocket">12 / 12</span>
+        <span class="k">FLARE</span><span></span><span id="qFlare">32 / 32</span>
+      </div>
+    </div>
+    <div class="sect">
+      <fieldset><legend>SANDBOX OPSİYONLARI</legend>
+        <label class="opt"><input type="checkbox" id="optFree" checked> Free flight<small>serbest manvra</small></label>
+        <label class="opt"><input type="checkbox" id="optArcade" checked> Arcade mode<small>assisted limits</small></label>
+        <label class="opt"><input type="checkbox" id="optAuto" checked> Auto start<small>motor sıcak başlar</small></label>
+        <label class="opt"><input type="checkbox" id="optFuelUse" checked> Fuel use<small>yakıt tüketimi</small></label>
+        <label class="opt"><input type="checkbox" id="optStall" checked> Stall + hard landing<small>12 m/s iniş sınırı</small></label>
+        <label class="opt">TAVAN
+          <select id="optCeil"><option>6000</option><option selected>12000</option><option>15000</option><option>20000</option></select>
+          <small>m</small></label>
+        <div class="row" style="margin-top:4px">
+          <label class="opt" style="flex:1">PITCH<small><input type="number" id="gPitch" value="1" min="0" max="1" step="0.05" style="width:44px"></small></label>
+          <label class="opt" style="flex:1">ROLL<small><input type="number" id="gRoll" value="0.35" min="0" max="1" step="0.05" style="width:44px"></small></label>
+        </div>
+        <div class="row">
+          <label class="opt" style="flex:1">YAW<small><input type="number" id="gYaw" value="1" min="0" max="1" step="0.05" style="width:44px"></small></label>
+          <label class="opt" style="flex:1">AIR YAW<small><input type="number" id="gAirYaw" value="0.2" min="0" max="1" step="0.05" style="width:44px"></small></label>
+        </div>
+      </fieldset>
+    </div>
+    <div class="sect">
+      <div class="cap">KLAVYE</div>
+      <div class="kval">
+        <span class="k">W / S</span><span></span><span class="kkey">burnu aşağı / yukarı</span>
+        <span class="k">A / D</span><span></span><span class="kkey">kanat sol / sağ</span>
+        <span class="k">Q / E</span><span></span><span class="kkey">rudder sol / sağ</span>
+        <span class="k">Shift</span><span></span><span class="kkey">afterburner</span>
+        <span class="k">I · C · G</span><span></span><span class="kkey">motor · canopy · arm</span>
+        <span class="k">Space</span><span></span><span class="kkey">M61 toplu atış</span>
+        <span class="k">R · F · B</span><span></span><span class="kkey">roket · flare · fren</span>
+        <span class="k">T · Z</span><span></span><span class="kkey">kayıt · analiz</span>
+      </div>
+      <div class="note">Kalkış: gaz %100 → 55 m/s → S (burun yukarı). İniş: gaz azalt, hafif burun.</div>
+    </div>
+  </section>
+
+  <section id="center">
+    <div id="centerTop">MCK-AVİATİON / KNOX FALCON F-16 · Görsel uçuş sahnesi + kokpit · <span id="fps">—</span></div>
+    <div id="sceneWrap">
+      <canvas id="scene"></canvas>
+      <button class="btn" id="btnView" title="Kuyruk / Kokpit görüşü">GÖRÜŞ: KUYRUK</button>
+    </div>
+    <div id="dashwrap"><canvas id="dash" width="2158" height="729"></canvas></div>
+    <div id="hudbar"></div>
+    <div id="statusbar" style="color:var(--amber)">PARKED · ENGINE OFF</div>
+    <div id="logList"></div>
+  </section>
+
+  <section id="right">
+    <div class="sect">
+      <div class="cap">FLIGHT ENGINE · TELEMETRİ <b>v1</b></div>
+      <table id="tele"></table>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn" id="btnRec2" style="flex:1">● Kayıt başlat</button>
+        <button class="btn" id="btnClear2" style="flex:1">Temizle</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+        <span style="font-size:10px;color:var(--dim)">örnek</span>
+        <input type="number" id="sampleEvery" value="0.5" min="0.1" max="5" step="0.1" style="width:56px">
+        <span style="font-size:10px;color:var(--dim)">s · <span id="recInfo">kayıt durmuyor</span></span>
+      </div>
+    </div>
+    <div class="sect">
+      <div class="cap">NAV / BALLISTIC (CCIP)</div>
+      <div class="kval">
+        <span class="k">TTG</span><span></span><span id="qTtg" style="color:var(--green)">—</span>
+        <span class="k">RNG</span><span></span><span id="qRng" style="color:var(--green)">—</span>
+        <span class="k">NAV</span><span></span><span id="qNav" style="color:var(--green)">GROUND ESTIMATE</span>
+      </div>
+    </div>
+    <div class="sect">
+      <div class="cap">AIRFRAME DURUMU</div>
+      <div class="kval" id="partsQuick"></div>
+      <button class="btn" id="btnService2" style="width:100%;margin-top:6px">F-16 Airframe Service ▸</button>
+    </div>
+  </section>
+</main>
+
+<!-- ANALYSIS -->
+<div class="modal" id="mAnalysis"><div class="dialog">
+  <h2>UÇUŞ ANALİZİ</h2>
+  <div class="sub" id="anaSub">—</div>
+  <div class="stats" id="anaStats"></div>
+  <div class="charts" id="anaCharts"></div>
+  <div class="closeRow">
+    <button class="btn" id="btnAnaExport">Telemetri CSV indir</button>
+    <button class="btn primary" id="btnAnalysisClose">Kapat (Z)</button>
+  </div>
+</div></div>
+
+<!-- SERVICE -->
+<div class="modal" id="mService"><div class="dialog" style="width:min(760px,95vw)">
+  <h2>F-16 AIRFRAME SERVICE</h2>
+  <div class="sub" id="svcSub">Bileşen seç → servicela. Yakıt/silah yükleme parked iken daha hızlıdır.</div>
+  <table class="parts" id="svcParts"></table>
+  <div class="row" style="margin-top:10px">
+    <button class="btn primary" id="svcFix">Servis bileşen</button>
+    <button class="btn" id="svcRefuel">JP-8 +50 L</button>
+    <button class="btn" id="svcAmmo">20 mm +600</button>
+    <button class="btn" id="svcRocket">Roket +12</button>
+    <button class="btn" id="svcFlare">Flare +32</button>
+  </div>
+  <div class="closeRow" style="justify-content:space-between">
+    <span class="note" id="svcMsg" style="flex:1"></span>
+    <button class="btn" id="btnServiceClose">Kapat</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+/* ============================================================
+   KNOX FALCON F-16 — tarayıcı uçuş motoru
+   MCK-Aviation / KnoxFalcon modundaki gerçek değerlerden derlendi:
+   · F16SubsonicAero CL/CD tabloları (CLmax 1.34 @15°), kanat 27.87 m²
+   · İtki: 76 000 N military / 120 000 N afterburner, yükseklik kaybı
+   · US Standard Atmosphere (288.15 K, lapse 0.0065, strato >11 km)
+   · FlightSpeedEnvelope → a=340.3 m/s referans, mach07 threshold
+   · FixedStepRunner: 1/30 s adım   · Telemetry v1: 24 alan
+   · Yakıt 300 L JP-8 · M61 600 rnd @110/s · Roket 12 · Flare 32
+   · Roket ≥12 m / flare ≥3 m alt inhisası · HARD LANDING >12 m/s
+   · G limit 9 / -3 · Tavan 12 000 m (default ceiling)
+   ============================================================ */
+const G=9.80665, STEP=1/30, RHO0=1.225, DEG=180/Math.PI, RAD=Math.PI/180;
+const WING=27.87, G_MAX=9, G_MIN=-3;
+const MIL_THRUST=76000, AB_THRUST=120000;
+const FUEL_MAX=300, GUN_MAX=600, ROCKET_MAX=12, FLARE_MAX=32;
+const ROCKET_MIN_ALT=12, FLARE_MIN_ALT=3, HARD_LANDING_VS=12, TAKEOFF_SPEED=55;
+
+/* --- F16SubsonicAero katsayı tabloları --- */
+const AOA_BK=[-30,-25,-20,-15,-10,-5,0,5,10,15,20,25,30,45,60,90];
+const CL_TAB=[-1.09,-0.71,-0.30,0.11,0.48,0.86,1.06,1.24,1.34,1.34,1.18,0.90,0.62,0.27,0.09,0.02];
+const CD_AOA=[-40,-15,0,10,20,30,45,60,90];
+const CD_TAB=[0.24,0.045,0.020,0.040,0.086,0.170,0.310,0.640,1.100];
+function interp(x,bk,tab){
+  if(x<=bk[0])return tab[0];
+  for(let i=1;i<bk.length;i++) if(x<=bk[i]){
+    const t=(x-bk[i-1])/(bk[i]-bk[i-1]);return tab[i-1]+t*(tab[i]-tab[i-1]);}
+  return tab[tab.length-1];
+}
+const clOf=a=>interp(a,AOA_BK,CL_TAB);
+const cdOf=a=>interp(a,CD_AOA,CD_TAB);
+
+/* --- US Standard Atmosphere --- */
+function atm(h){
+  h=Math.max(-500,Math.min(20000,h));
+  let T,p;
+  if(h<=11000){T=288.15-0.0065*h;p=101325*Math.pow(T/288.15,5.25588);}
+  else{T=216.65;p=101325*Math.pow(216.65/288.15,5.25588)*Math.exp(-G*(h-11000)/(287.05287*216.65));}
+  return {T,rho:p/(287.05287*T),pressure:p,soundSpeed:Math.sqrt(1.4*287.05287*Math.max(T,1))};
+}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const smooth=(c,t,r,dt)=>{const d=t-c,m=r*dt;return c+clamp(d,-m,m);};
+const pad3=v=>String(Math.max(0,Math.round(v))).padStart(3,"0");
+const pad5=v=>String(Math.max(0,Math.round(v))).padStart(5,"0");
+
+/* ================= SANDBOX/AIRFRAME ================= */
+const PARTS=[["SeatFrontLeft","Katapult koltuğu","Kokpit"],["DoorFrontLeft","Canopy kilit","Kokpit"],
+["Battery","Elektrik güç ünitesi","Power"],["Engine","Jet motoru","Propulsion"],
+["GasTank","JP-8 yakıt tankı","Yakıt"],["WingLeft","Sol kanat","Kanat"],["WingRight","Sağ kanat","Kanat"],
+["TailFin","Dikey stabilizatör","Kanat"],["FlightHydraulics","Uçuş hidrolikleri","Kontrol"],
+["TireFrontLeft","Burun kara tekeri","Kara teker"],["TireRearLeft","Sol ana teker","Kara teker"],
+["TireRearRight","Sağ ana teker","Kara teker"],["RocketBay","Roket mühimmat bayı","Silah"]];
+
+const S={
+  running:true, simTime:0,
+  x:0,y:0,z:1.8, vx:0,vy:0,vz:0,
+  pitch:0,bank:0,heading:0, aoa:0, sideslip:0,
+  pitchIn:0,rollIn:0,yawIn:0, ab:false, abHeld:false, brake:false,
+  engine:"OFF", spool:0, thrSpool:0, abSpool:0,
+  fuel:FUEL_MAX, gunRounds:GUN_MAX, rockets:ROCKET_MAX, flares:FLARE_MAX,
+  armed:false, canopy:0, canopyTarget:0, onGround:true,
+  mach:0, soundSpeed:340.3, loadFactorG:1, qPa:0,
+  rollRate:0,pitchRate:0,yawRate:0,
+  stall:false, status:"PARKED", statusColor:"amber", warn:null,
+  weaponStatus:null, weaponTimer:0,
+  impactT:0, impactRng:0, rktCd:0, flrCd:0, gunCd:0, overheat:0,
+  ceiling:12000, gains:{pitch:1,roll:0.35,yaw:1,airYaw:0.20},
+  options:{free:true,arcade:true,auto:true,fuelUse:true,stall:true},
+  parts:{}, track:[], stats:{}, flowDisplay:0,
+  telemCache:null, record:{on:false,every:0.5,t:0,samples:[],startedAt:0},
+  lastStallEvent:-99, gunHeat:0,
+};
+PARTS.forEach(p=>S.parts[p[0]]=100);
+function resetStats(){
+  S.stats={maxG:1,maxMach:0,maxAlt:0,minAlt:1e9,stalls:0,hardLandings:0,fuelUsed:0,
+    maxIAS:0,maxVs:0,minVs:0,gunFired:0,rocketsAway:0,flaresAway:0,maxThrottle:0,flights:0};
+}
+resetStats();
+
+const logList=document.getElementById("logList");
+function log(tag,msg,cls){
+  const d=document.createElement("div");d.className=cls||"";
+  d.innerHTML='<span style="color:#2a5533">['+S.simTime.toFixed(1).padStart(8," ")+'s]</span> <b>'+tag+'</b> '+msg;
+  logList.prepend(d);
+  while(logList.children.length>110)logList.removeChild(logList.lastChild);
+}
+const ALERTS={
+  "ROCKET RELEASE: MINIMUM ALTITUDE 12 M":"NEED 12 M ALT","FLARES: MINIMUM ALTITUDE 3 M":"NEED 3 M ALT",
+  "MASTER ARM SAFE":"ARM SAFE","CANNON EMPTY - LOAD 20 MM AMMO":"M61 EMPTY",
+  "ROCKET BAY EMPTY - LOAD AMMUNITION":"BAY EMPTY","FLARE DISPENSER EMPTY":"FLARES EMPTY",
+  "ROCKET RELEASE COOLDOWN":"RKT COOLDOWN","FLARE DISPENSER COOLDOWN":"FLARE COOLDOWN",
+  "ROCKET AWAY":"ROCKET AWAY","ROCKET IMPACT":"ROCKET IMPACT","M61 CANNON FIRING":"M61 FIRING",
+  "FLARE BURST - VISUAL COUNTERMEASURE":"FLARE BURST","IMPACT OUTSIDE LOADED TERRAIN":"UNLOADED IMPACT",
+  "CANNON OVERHEAT - COOL DOWN":"M61 OVERHEAT",
+  "STALL - LOWER NOSE / ADD POWER":"STALL","FUEL LOW":"FUEL LOW","ENG OFF AIRBORNE":"ENG OFF",
+  "CANOPY OPEN":"CANOPY","HARD LANDING":"HARD LANDING","OVERSPEED":"OVERSPEED"};
+function setStatus(txt,color){S.status=txt;S.statusColor=color||"amber";}
+
+const massBase=8573; // kg (FlightDynamicsV2 18.5k/93k/107k N kütle bantları)
+const mass=()=>massBase+S.fuel*0.8;
+
+/* ================= UÇUŞ ADIMI ================= */
+const key={pitchUp:false,pitchDown:false,rollL:false,rollR:false,yawL:false,yawR:false,cannon:false};
+let sliderVal=35;
+
+function step(dt){
+  S.simTime+=dt;
+  const wasGround=S.onGround;
+  S.justTook=Math.max(0,(S.justTook||0)-dt);
+  const opt=S.options,g=S.gains;
+
+  /* --- kontroller (W=burnu aşağı, S=burnu yukarı) --- */
+  const pIn=(key.pitchDown?1:0)-(key.pitchUp?1:0);
+  const rIn=(key.rollR?1:0)-(key.rollL?1:0);
+  const yIn=(key.yawR?1:0)-(key.yawL?1:0);
+  S.pitchIn=smooth(S.pitchIn,pIn*g.pitch,5,dt);
+  S.rollIn =smooth(S.rollIn ,rIn*g.roll ,4,dt);
+  S.yawIn  =smooth(S.yawIn  ,yIn*(S.onGround?g.yaw:g.airYaw*g.yaw),4,dt);
+  const thr=clamp(sliderVal,0,100)/100;
+
+  /* --- motor spool --- */
+  if(S.engine==="STARTING"){S.spool=smooth(S.spool,0.08,0.05,dt);
+    if(S.spool>0.075){S.engine="RUNNING";log("ENGINE","Spool complete — RUNNING","gn");}}
+  else if(S.engine==="STOPPING"){S.spool=smooth(S.spool,0,0.07,dt);
+    if(S.spool<=0.003){S.engine="OFF";log("ENGINE","OFF","am");}}
+  S.thrSpool=smooth(S.thrSpool,S.engine==="RUNNING"?thr:0,S.engine==="RUNNING"?0.5:0.15,dt);
+  const abReq=S.engine==="RUNNING"&&(S.ab||S.abHeld)&&thr>0.5;
+  S.abSpool=smooth(S.abSpool,abReq?1:0,abReq?0.55:1.1,dt);
+
+  /* --- atmosfer --- */
+  const at=atm(S.z);S.soundSpeed=at.soundSpeed;
+  const speed=Math.hypot(S.vx,S.vy,S.vz);
+  S.mach=speed/at.soundSpeed;
+  S.qPa=0.5*at.rho*speed*speed;
+  const rhoF=at.rho/RHO0;
+
+  /* --- yakıt (legacy formula: (0.015+0.1thr+0.025*spd/55) L/s taban) --- */
+  let flow=0;
+  if(S.engine==="RUNNING"&&opt.fuelUse){
+    flow=(0.015+0.1*S.thrSpool+0.025*speed/55)*(1+1.6*S.abSpool);
+    if(S.thrSpool<0.02&&speed<1)flow=0.011;
+  }
+  S.flowDisplay=flow*(1+1.0*S.abSpool)*3600*1.764; // lb/h display
+  if(flow>0){
+    const used=Math.min(S.fuel,flow*dt);S.fuel-=used;S.stats.fuelUsed+=used;
+    if(S.fuel<=0.01){S.fuel=0;
+      if(S.engine==="RUNNING"||S.engine==="STARTING"){S.engine="STOPPING";log("FUEL","JP-8 EMPTY — engine shutdown","rd");}}
+  }
+
+  /* --- canopy --- */
+  if(Math.abs(S.canopyTarget-S.canopy)>0.001){
+    S.canopy=smooth(S.canopy,S.canopyTarget,0.22,dt);
+    if(Math.abs(S.canopyTarget-S.canopy)<0.01){S.canopy=S.canopyTarget;
+      log("CANOPY",S.canopy>0.5?"OPEN":"CLOSED",S.canopy>0.5?"am":"gn");}
+  }
+
+  /* --- uçuış yolu / AoA --- */
+  const pathAngle=speed>1?Math.asin(clamp(S.vz/speed,-1,1)):0;
+  S.aoa=S.onGround?S.pitch*DEG:(S.pitch-pathAngle)*DEG;
+  S.sideslip=clamp(-S.yawIn*4-Math.sin(S.bank)*2,-6,6);
+
+  /* --- aero katsayıları --- */
+  const aDeg=clamp(S.aoa,-40,90);
+  let cl=clOf(aDeg),cd=cdOf(aDeg);
+  if(S.mach>0.82)cd*=1+Math.pow(S.mach-0.82,2)*26; // transonic rise (mach07 env)
+  const lift=S.qPa*WING*cl, drag=S.qPa*WING*cd;
+
+  /* --- açısal hız entegrasyonu (DIRECT_RATE) --- */
+  const pitchRate=S.onGround?S.pitchIn*0.22:S.pitchIn*0.55;
+  const rollRate=S.rollIn*2.2;
+  const yawRate=S.yawIn*0.5;
+  S.pitchRate=pitchRate*DEG;S.rollRate=rollRate*DEG;S.yawRate=yawRate*DEG;
+  S.pitch=clamp(S.pitch+pitchRate*dt,-1.35,1.5);
+  S.bank=clamp(S.bank+rollRate*dt,-1.45,1.45);
+  if(!S.onGround)S.heading+=(G*Math.tan(S.bank)/Math.max(speed,30))*dt+yawRate*dt;
+  else S.heading+=S.yawIn*0.55*clamp(speed/12,0,1)*dt;
+
+  /* --- birim vektörler --- */
+  const cp=Math.cos(S.pitch),sp=Math.sin(S.pitch);
+  const nx=cp*Math.sin(S.heading),ny=cp*Math.cos(S.heading),nz=sp;
+
+  /* --- ITKI --- */
+  let T=0;
+  if(S.engine==="RUNNING"){
+    T=(MIL_THRUST*S.thrSpool+AB_THRUST*S.abSpool*0.85)*(0.35+0.65*rhoF);
+    if(S.z>S.ceiling)T*=Math.max(0.05,1-(S.z-S.ceiling)/1500);
+  }
+
+  const m=mass();
+  let ax=0,ay=0,az=0;
+  if(S.onGround){
+    /* zemin fiziği: sürtünme + fren + itki, teker yönlendirme */
+    const dec=(S.brake?0.38:0.012+((S.engine==="OFF"||S.engine==="STOPPING")?0.02:0))*m*G;
+    const red=dec*dt/m;
+    if(speed>0.01){
+      const k=Math.max(0,speed-red)/Math.max(speed,0.001);
+      S.vx*=k;S.vy*=k;
+      /* hız yönünü burun yönüne çek (tekerlek tutuşu) */
+      const perp=S.vx*ny-S.vy*nx;
+      const grip=clamp(dt*4,0,0.35);
+      S.vx-=ny*perp*grip;S.vy-=nx*perp*grip;
+    }else{S.vx=0;S.vy=0;}
+    /* itki doğrudan hız olarak: v += (T/m) dt (yatay bileşen) */
+    S.vx+=nx*T/m*dt;S.vy+=ny*T/m*dt;
+    S.bank=smooth(S.bank,0,4,dt);
+    S.pitch=smooth(S.pitch,S.brake?-0.006:clamp(S.pitch,-0.01,0.3),2.5,dt);
+    if(speed>TAKEOFF_SPEED&&S.pitch>0.09){
+      S.onGround=false;S.stats.flights++;S.justTook=0.8;
+      log("LIFT","TAKEOFF — havada ("+S.z.toFixed(1)+" m)","gn");
+    }
+  }else{
+    const spd=speed>0.2?speed:0.2;
+    const vux=S.vx/spd,vuy=S.vy/spd,vuz=S.vz/spd;
+    /* lift yönü: Симmetrik düzlem ↑, bank ile yana yatırılır */
+    let rgt=[vuy,-vux,0];let rl=Math.hypot(rgt[0],rgt[1],rgt[2]);
+    if(rl<1e-4){rgt=[Math.cos(S.heading),-Math.sin(S.heading),0];rl=1;}
+    const rX=rgt[0]/rl,rY=rgt[1]/rl,rZ=rgt[2]/rl;
+    let ux=rY*vuz-rZ*vuy, uy=rZ*vux-rX*vuz, uz=rX*vuy-rY*vux; /* up = right × v̂ */
+    const ul=Math.hypot(ux,uy,uz)||1;ux/=ul;uy/=ul;uz/=ul;
+    const cb=Math.cos(S.bank),sb=Math.sin(S.bank);
+    const ldx=ux*cb+rX*sb, ldy=uy*cb+rY*sb, ldz=uz*cb+rZ*sb;
+    ax=(T*nx)/m-(drag*vux)/m+(lift*ldx)/m;
+    ay=(T*ny)/m-(drag*vuy)/m+(lift*ldy)/m;
+    az=(T*nz)/m-(drag*vuz)/m+(lift*ldz)/m-G;
+    /* tavan üstü: nazik aşağı it */
+    if(S.z>S.ceiling+200)az=Math.min(az,-(S.z-S.ceiling)*0.01);
+    /* G limit aksiyonu: aşırı G kanat hasarı */
+  }
+
+  /* integrasyon */
+  S.vx+=ax*dt;S.vy+=ay*dt;S.vz+=az*dt;
+  if(S.onGround)S.vz=0;
+  S.x+=S.vx*dt;S.y+=S.vy*dt;S.z+=S.vz*dt;
+
+  /* G yüklemesi */
+  if(!S.onGround){
+    const turnN=Math.abs(1/Math.max(0.35,Math.cos(S.bank)));
+    const aeroN=clamp(lift/(m*G),G_MIN*0.3,20);
+    S.loadFactorG=clamp(Math.max(aeroN*Math.max(0.0,Math.cos(S.bank)*0.3+0.7),Math.min(turnN,aeroN>0.9?turnN:1)),G_MIN,G_MAX*1.25);
+  }else S.loadFactorG=1;
+  if(S.loadFactorG>G_MAX+0.5){
+    S.parts.WingLeft=clamp(S.parts.WingLeft-0.35,0,100);
+    S.parts.WingRight=clamp(S.parts.WingRight-0.35,0,100);
+  }
+
+  /* stall */
+  if(!S.onGround&&opt.stall){
+    if(aDeg>15.5&&S.qPa>150){
+      if(!S.stall&&S.simTime-S.lastStallEvent>2.5){S.stall=true;S.stats.stalls++;
+        log("STALL","STALL — burun aşağı / güç ekle","rd");}
+      S.lastStallEvent=S.simTime;
+    }else if(aDeg<12)S.stall=false;
+  }else S.stall=false;
+
+  /* zemin teması / iniş — az önce kalkış olduysa kontrol atlanır */
+  if(S.z<=1.8&&(!S.justTook||S.vz<-1)){
+    if(!S.onGround){
+      S.onGround=true;
+      const vs=Math.abs(S.vz);
+      if(vs>HARD_LANDING_VS){
+        S.stats.hardLandings++;
+        S.parts.TireFrontLeft=clamp(S.parts.TireFrontLeft-45,0,100);
+        S.parts.TireRearLeft=clamp(S.parts.TireRearLeft-40,0,100);
+        S.parts.TireRearRight=clamp(S.parts.TireRearRight-40,0,100);
+        S.parts.FlightHydraulics=clamp(S.parts.FlightHydraulics-30,0,100);
+        S.parts.Engine=clamp(S.parts.Engine-35,0,100);
+        log("HARD LANDING","|V/S| "+vs.toFixed(1)+" m/s > "+HARD_LANDING_VS+" — teker/hidrolik hasar","rd");
+      }else log("LANDING","temas — V/S "+vs.toFixed(1)+" m/s","gn");
+      S.pitch=clamp(S.pitch,-0.02,0.18);
+    }
+    S.z=1.8;S.vz=0;
+  }else if(S.z>2.0)S.onGround=false;
+
+  /* silah zamanları */
+  S.rktCd=Math.max(0,S.rktCd-dt);S.flrCd=Math.max(0,S.flrCd-dt);
+  S.overheat=Math.max(0,S.overheat-dt*0.35);
+  if(S.weaponTimer>0){S.weaponTimer-=dt;if(S.weaponTimer<=0)S.weaponStatus=null;}
+  if(S.gunCd>0)S.gunCd-=dt;
+  if(key.cannon&&S.engine!=="OFF")fireCannon(true);
+
+  /* CCIP (mod d.KF_impactTime/impactDistance benzeri) */
+  const hSpeed=Math.hypot(S.vx,S.vy);
+  const disc=S.vz*S.vz+2*G*Math.max(S.z,0);
+  S.impactT=disc>=0?(S.vz+Math.sqrt(disc))/G:0;
+  S.impactRng=hSpeed*S.impactT;
+
+  /* durum satırı */
+  if(S.onGround){
+    if(speed<0.4)setStatus("PARKED");
+    else if(S.pitch>0.05&&speed>TAKEOFF_SPEED-12)setStatus("TAKEOFF / ROTATE","gn");
+    else setStatus("TAXI / TAKEOFF ROLL");
+  }else{
+    setStatus(S.stall?"STALL - LOWER NOSE / ADD POWER":(S.mach>0.98?"OVERSPEED":"AIRBORNE"),S.stall||S.mach>0.98?"rd":"gn");
+  }
+  const isOpen=S.canopy>0.05;
+  S.warn=S.fuel<30?"FUEL LOW":(!S.onGround&&S.engine!=="RUNNING"?"ENG OFF AIRBORNE":isOpen?"CANOPY OPEN":S.stall?"STALL - LOWER NOSE / ADD POWER":null);
+
+  /* --- TELEMETRY v1 (KnoxFalcon_Telemetry.lua alan listesi) --- */
+  const hdg=((S.heading*DEG)%360+360)%360;
+  S.telemCache={
+    simTimeSeconds:S.simTime,speedMps:speed,speedKmh:speed*3.6,mach:S.mach,
+    altitudeM:S.z,verticalSpeedMps:S.vz,nosePitchDeg:S.pitch*DEG,bankDeg:S.bank*DEG,
+    headingDeg:hdg,rollRateDegS:S.rollRate,pitchRateDegS:S.pitchRate,yawRateDegS:S.yawRate,
+    aoaDeg:S.aoa,sideslipDeg:S.sideslip,loadFactorG:S.loadFactorG,
+    throttlePct:S.thrSpool*100,afterburnerPct:S.abSpool*100,
+    dynamicPressurePa:S.qPa,specificEnergyJkg:speed*speed/2+G*S.z,
+    positionXM:S.x,positionYM:S.y,positionZM:S.z,
+    velocityXMps:S.vx,velocityYMps:S.vy,velocityZMps:S.vz};
+
+  const t=S.telemCache;
+  S.stats.maxG=Math.max(S.stats.maxG,t.loadFactorG);
+  S.stats.maxMach=Math.max(S.stats.maxMach,S.mach);
+  S.stats.maxAlt=Math.max(S.stats.maxAlt,S.z);
+  S.stats.minAlt=S.onGround?S.stats.minAlt:Math.min(S.stats.minAlt,S.z);
+  S.stats.maxIAS=Math.max(S.stats.maxIAS,t.speedKmh);
+  S.stats.maxVs=Math.max(S.stats.maxVs,t.verticalSpeedMps);
+  S.stats.minVs=Math.min(S.stats.minVs,t.verticalSpeedMps);
+  S.stats.maxThrottle=Math.max(S.stats.maxThrottle,t.throttlePct);
+
+  /* track */
+  const last=S.track[S.track.length-1];
+  if(!last||Math.hypot(S.x-last.x,S.y-last.y)>22)S.track.push({x:S.x,y:S.y,z:S.z});
+  if(S.track.length>900)S.track.splice(0,150);
+
+  /* kayıt */
+  if(S.record.on){
+    S.record.t+=dt;
+    if(S.record.t>=S.record.every){
+      S.record.t=0;
+      S.record.samples.push({t:S.simTime,status:S.status,...S.telemCache});
+    }
+  }
+}
+
+/* --- M61 topu: 6600 rds/min → 110/s --- */
+function fireCannon(continuous){
+  if(S.gunCd>0)return;
+  if(S.overheat>=5){setWeapon("CANNON OVERHEAT - COOL DOWN");return;}
+  if(S.gunRounds<=0){setWeapon("CANNON EMPTY - LOAD 20 MM AMMO");return;}
+  if(!S.armed){setWeapon("MASTER ARM SAFE");return;}
+  const shots=continuous?2:1;
+  S.gunRounds-=shots;S.stats.gunFired+=shots;
+  S.gunCd=shots/110;S.overheat=Math.min(6,S.overheat+0.045);
+  setWeapon(S.gunRounds<=0?"CANNON EMPTY - LOAD 20 MM AMMO":"M61 CANNON FIRING");
+}
+function setWeapon(msg){S.weaponStatus=msg;S.weaponTimer=2;}
+function fireRocket(){
+  if(!S.armed){setWeapon("MASTER ARM SAFE");log("SAFETY","ARM SAFE — ARM ON gerekli","am");return;}
+  if(S.rockets<=0){setWeapon("ROCKET BAY EMPTY - LOAD AMMUNITION");return;}
+  if(S.z<ROCKET_MIN_ALT){setWeapon("ROCKET RELEASE: MINIMUM ALTITUDE 12 M");return;}
+  if(S.rktCd>0){setWeapon("ROCKET RELEASE COOLDOWN");return;}
+  S.rockets--;S.rktCd=3;S.stats.rocketsAway++;
+  setWeapon("ROCKET AWAY");log("ROCKET","bırakıldı · "+S.rockets+" kaldı","am");
+  setTimeout(()=>{if(S.weaponStatus==="ROCKET AWAY")setWeapon("ROCKET IMPACT");},1800);
+}
+function fireFlare(){
+  if(S.flares<=0){setWeapon("FLARE DISPENSER EMPTY");return;}
+  if(S.z<FLARE_MIN_ALT){setWeapon("FLARES: MINIMUM ALTITUDE 3 M");return;}
+  if(S.flrCd>0){setWeapon("FLARE DISPENSER COOLDOWN");return;}
+  S.flares--;S.flrCd=1.2;S.stats.flaresAway++;
+  setWeapon("FLARE BURST - VISUAL COUNTERMEASURE");
+  log("FLARE","burst · "+S.flares+" kaldı","am");
+}
+function toggleEngine(){
+  if(S.engine==="OFF"){S.engine="STARTING";log("ENGINE","STARTING — spool","am");}
+  else{S.engine="STOPPING";log("ENGINE","STOPPING","am");}
+}
+function toggleCanopy(){S.canopyTarget=S.canopyTarget>0.5?0:1;log("CANOPY",(S.canopyTarget>0.5?"açılıyor":"kapanıyor")+"…");}
+function toggleArm(){S.armed=!S.armed;log("MASTER ARM",S.armed?"ARM ON — silah aktif":"ARM SAFE — silah pasif",S.armed?"am":"gn");}
+function resetSim(){
+  Object.assign(S,{simTime:0,x:0,y:0,z:1.8,vx:0,vy:0,vz:0,
+    pitch:0,bank:0,heading:0,aoa:0,sideslip:0,pitchIn:0,rollIn:0,yawIn:0,
+    ab:false,brake:false,engine:S.options.auto?"RUNNING":"OFF",
+    spool:S.options.auto?0.08:0,thrSpool:S.options.auto?0.35:0,abSpool:0,
+    fuel:FUEL_MAX,gunRounds:GUN_MAX,rockets:ROCKET_MAX,flares:FLARE_MAX,
+    armed:false,canopy:0,canopyTarget:0,onGround:true,mach:0,stall:false,
+    status:"PARKED",warn:null,weaponStatus:null,rktCd:0,flrCd:0,gunCd:0,overheat:0,track:[],loadFactorG:1});
+  sliderVal=35;document.getElementById("thr").value=35;
+  PARTS.forEach(p=>S.parts[p[0]]=100);
+  resetStats();
+  S.record.samples=[];S.record.t=0;S.record.startedAt=0;S.record.on=false;
+  logList.innerHTML="";
+  log("SIM","reset — PARKED · motor "+(S.options.auto?"RUNNING (gaz %35)":"OFF"),"gn");
+  updButtons();
+}
+
+/* ================= UI BAĞLAMA ================= */
+const $=id=>document.getElementById(id);
+window.addEventListener("keydown",e=>{
+  if(/^(INPUT|SELECT)$/.test(e.target.tagName))return;
+  switch(e.code){
+    case"KeyW":key.pitchUp=true;break;
+    case"KeyS":key.pitchDown=true;break;
+    case"KeyA":key.rollL=true;break;
+    case"KeyD":key.rollR=true;break;
+    case"KeyQ":key.yawL=true;break;
+    case"KeyE":key.yawR=true;break;
+    case"ShiftLeft":case"ShiftRight":S.abHeld=true;break;
+    case"Space":key.cannon=true;e.preventDefault();break;
+    case"KeyI":toggleEngine();break;
+    case"KeyC":toggleCanopy();break;
+    case"KeyG":toggleArm();updButtons();break;
+    case"KeyR":fireRocket();break;
+    case"KeyF":fireFlare();break;
+    case"KeyB":S.brake=!S.brake;updButtons();break;
+    case"KeyT":toggleRecord();break;
+    case"KeyZ":openAnalysis();break;
+  }
+});
+window.addEventListener("keyup",e=>{switch(e.code){
+  case"KeyW":key.pitchUp=false;break;case"KeyS":key.pitchDown=false;break;
+  case"KeyA":key.rollL=false;break;case"KeyD":key.rollR=false;break;
+  case"KeyQ":key.yawL=false;break;case"KeyE":key.yawR=false;break;
+  case"ShiftLeft":case"ShiftRight":S.abHeld=false;break;
+  case"Space":key.cannon=false;break;
+}});
+$("thr").addEventListener("input",e=>{sliderVal=+e.target.value;});
+["btnIdle:0","btnCruise:70","btnMil:100"].forEach(s=>{
+  const [id,v]=s.split(":");$(id).addEventListener("click",()=>{sliderVal=+v;$("thr").value=+v;});
+});
+$("btnEngine").onclick=toggleEngine;
+$("btnCanopy").onclick=toggleCanopy;
+$("btnArm").onclick=()=>{toggleArm();updButtons();};
+$("btnCannon").addEventListener("mousedown",()=>key.cannon=true);
+$("btnCannon").addEventListener("mouseup",()=>key.cannon=false);
+$("btnCannon").addEventListener("mouseleave",()=>key.cannon=false);
+$("btnRocket").onclick=fireRocket;
+$("btnFlare").onclick=fireFlare;
+$("btnBrake").onclick=()=>{S.brake=!S.brake;updButtons();};
+$("btnPark").onclick=()=>{S.brake=true;sliderVal=0;$("thr").value=0;updButtons();};
+$("btnAfterburner").addEventListener("mousedown",()=>{S.ab=true;updButtons();});
+$("btnAfterburner").addEventListener("mouseup",()=>{S.ab=false;updButtons();});
+$("btnAfterburner").addEventListener("mouseleave",()=>{if(S.ab){S.ab=false;updButtons();}});
+$("optFree").onchange=e=>S.options.free=e.target.checked;
+$("optArcade").onchange=e=>S.options.arcade=e.target.checked;
+$("optAuto").onchange=e=>{S.options.auto=e.target.checked;if(!e.target.checked&&S.engine==="RUNNING"){S.engine="STOPPING";}};
+$("optFuelUse").onchange=e=>S.options.fuelUse=e.target.checked;
+$("optStall").onchange=e=>S.options.stall=e.target.checked;
+$("optCeil").onchange=e=>S.ceiling=+e.target.value;
+$("gPitch").onchange=e=>S.gains.pitch=clamp(+e.target.value,0,1);
+$("gRoll").onchange=e=>S.gains.roll=clamp(+e.target.value,0,1);
+$("gYaw").onchange=e=>S.gains.yaw=clamp(+e.target.value,0,1);
+$("gAirYaw").onchange=e=>S.gains.airYaw=clamp(+e.target.value,0,1);
+$("sampleEvery").onchange=e=>S.record.every=clamp(+e.target.value,0.1,5);
+$("btnReset").onclick=resetSim;
+function updButtons(){
+  $("btnBrake").classList.toggle("active",S.brake);
+  $("btnArm").classList.toggle("active",S.armed);
+  $("btnAfterburner").classList.toggle("active",S.ab);
+}
+
+/* ================= TELEMETRİ TABLO ================= */
+const TELE_FIELDS=[["simTimeSeconds","s"],["speedMps","m/s"],["speedKmh","km/h"],["mach","Mach"],
+["altitudeM","m"],["verticalSpeedMps","m/s"],["nosePitchDeg","deg"],["bankDeg","deg"],["headingDeg","deg"],
+["rollRateDegS","deg/s"],["pitchRateDegS","deg/s"],["yawRateDegS","deg/s"],["aoaDeg","AOA"],
+["sideslipDeg","BETA"],["loadFactorG","G"],["throttlePct","THR%"],["afterburnerPct","AB%"],
+["dynamicPressurePa","q Pa"],["specificEnergyJkg","Energy"],["positionXM","X m"],["positionYM","Y m"],
+["positionZM","Z m"],["velocityXMps","Vx"],["velocityYMps","Vy"],["velocityZMps","Vz"]];
+$("tele").innerHTML=TELE_FIELDS.map(f=>'<tr><td class="k">'+f[0]+'</td><td>'+f[1]+'</td><td class="n">0</td></tr>').join("");
+const teleCells=[...document.querySelectorAll("table#tele td.n")];
+function updTele(){
+  const t=S.telemCache;if(!t)return;
+  TELE_FIELDS.forEach((f,i)=>{
+    let v=t[f[0]];if(typeof v!=="number"||!isFinite(v))v=0;
+    teleCells[i].textContent=Math.abs(v)>=1000?v.toFixed(0):v.toFixed(Math.abs(v)>=100?1:2);
+    const h=(f[0]==="loadFactorG"&&Math.abs(v)>7)||(f[0]==="aoaDeg"&&Math.abs(v)>15)||(f[0]==="mach"&&v>0.95)||(f[0]==="verticalSpeedMps"&&Math.abs(v)>40);
+    teleCells[i].classList.toggle("hl",h);
+  });
+}
+
+/* ================= DASHBOARD (mod layout 2158×729) ================= */
+const cvD=$("dash"),ctx=cvD.getContext("2d");
+const CW=2158,CH=729;
+const GREEN="#9eff3d",WHITE="#cfd8d2",AMBER="#ffb000",DARK="#06180d",BARCOL="#0a230f";
+function fitDash(){
+  const wrap=$("dashwrap");
+  const scale=Math.min((wrap.clientWidth-6)/CW,(wrap.clientHeight-6)/CH,0.62);
+  cvD.style.width=(CW*scale|0)+"px";cvD.style.height=(CH*scale|0)+"px";
+}
+window.addEventListener("resize",fitDash);
+function fieldBox(x,y,w,h,align,text,color){
+  ctx.fillStyle=color||GREEN;
+  ctx.font="600 "+Math.round(h*0.72)+"px Consolas,monospace";
+  ctx.textAlign=align==="right"?"right":align==="center"?"center":"left";
+  ctx.textBaseline="middle";
+  const tx=align==="right"?x+w:align==="center"?x+w/2:x;
+  ctx.fillText(text,tx,y+h/2);
+}
+const line=(x1,y1,x2,y2,c,w)=>{ctx.strokeStyle=c;ctx.lineWidth=w||1;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
+function dial(cx,cy,r,frac){
+  ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.fillStyle="#02120a";ctx.fill();
+  ctx.strokeStyle="#16321a";ctx.lineWidth=2;ctx.stroke();
+  for(let i=0;i<=13;i++){const a=(140+i*260/13)*RAD;
+    line(cx+Math.cos(a)*(r-13),cy+Math.sin(a)*(r-13),cx+Math.cos(a)*(r-(i%2?20:26)),cy+Math.sin(a)*(r-(i%2?20:26)),i%2?"#2b5c36":GREEN,i%2?1:1.5);}
+  const a=(140+clamp(frac,0,1)*260)*RAD;
+  line(cx,cy,cx+Math.cos(a)*(r-16),cy+Math.sin(a)*(r-16),GREEN,2.6);
+  ctx.beginPath();ctx.arc(cx,cy,4,0,2*Math.PI);ctx.fillStyle=WHITE;ctx.fill();
+}
+function attitude(cx,cy,r){
+  const b=S.bank,p=S.pitch;
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.clip();
+  ctx.fillStyle="#07304c";ctx.fillRect(cx-r,cy-r,2*r,2*r);
+  ctx.save();
+  ctx.translate(cx,cy+clamp(p*85,-35,35));
+  ctx.rotate(-b);
+  ctx.fillStyle="#3d240f";ctx.fillRect(-2.5*r,0,5*r,2.5*r);
+  line(-2.5*r,0,2.5*r,0,WHITE,2);
+  [-20,-10,10,20].forEach(stp=>{const off=stp*1.45,ln=Math.abs(stp)===10?13:19;
+    line(-ln,off,ln,off,WHITE,1.2);});
+  ctx.restore();ctx.restore();
+  ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.strokeStyle="#16321a";ctx.lineWidth=2.4;ctx.stroke();
+  line(cx-r*0.42,cy,cx-r*0.14,cy,AMBER,2.4);line(cx+r*0.14,cy,cx+r*0.42,cy,AMBER,2.4);
+  line(cx,cy,cx,cy-r*0.2,AMBER,2);ctx.beginPath();ctx.arc(cx,cy,3,0,2*Math.PI);ctx.fillStyle=AMBER;ctx.fill();
+}
+function vbar(x,y,w,h,frac){
+  frac=clamp(frac,0,1);
+  ctx.fillStyle=DARK;ctx.fillRect(x,y,w,h);
+  ctx.fillStyle=BARCOL;ctx.fillRect(x+4,y+4,w-8,h-8);
+  const f=(h-8)*frac;
+  ctx.fillStyle=GREEN;ctx.fillRect(x+4,y+h-4-f,w-8,f);
+}
+function drawTrack(x,y,w,h){
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  ctx.fillStyle="#03110a";ctx.fillRect(x,y,w,h);
+  const tr=S.track;
+  if(tr.length<2){
+    ctx.font="600 20px Consolas";ctx.fillStyle="#2a5533";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText("MAP — track yok",x+w/2,y+h/2);ctx.restore();return;
+  }
+  let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+  tr.forEach(p=>{mnx=Math.min(mnx,p.x);mxx=Math.max(mxx,p.x);mny=Math.min(mny,p.y);mxy=Math.max(mxy,p.y);});
+  const pd=80;if(mxx-mnx<2*pd){mnx-=pd;mxx+=pd;}if(mxy-mny<2*pd){mny-=pd;mxy+=pd;}
+  const sc=Math.min(w/(mxx-mnx),h/(mxy-mny));
+  const toPx=p=>[x+w/2+(p.x-(mnx+mxx)/2)*sc,y+h/2-(p.y-(mny+mxy)/2)*sc];
+  ctx.beginPath();tr.forEach((p,i)=>{const q=toPx(p);i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});
+  ctx.strokeStyle="#3fae3f";ctx.lineWidth=1.8;ctx.stroke();
+  const hp=toPx({x:S.x,y:S.y});
+  ctx.beginPath();ctx.arc(hp[0],hp[1],5,0,2*Math.PI);ctx.fillStyle=GREEN;ctx.fill();
+  const hd=[Math.sin(S.heading),Math.cos(S.heading)];
+  line(hp[0],hp[1],hp[0]+hd[0]*20,hp[1]-hd[1]*20,AMBER,2);
+  ctx.restore();
+}
+let fpsCount="—";
+function drawDash(){
+  const t=S.telemCache||{};
+  ctx.clearRect(0,0,CW,CH);
+  ctx.fillStyle="#010401";ctx.fillRect(0,0,CW,CH);
+  ctx.textBaseline="middle";
+
+  /* data_entry (842,50,474,110) */
+  ctx.fillStyle=DARK;ctx.fillRect(842,50,474,110);
+  fieldBox(860,58,436,26,"center",S.options.free?"FE 0.5.6 / FREE":"FE 0.5.6 / ASSIST");
+  const hdg=Math.round(((t.headingDeg||0)%360+360)%360);
+  fieldBox(860,92,62,27,"left","HDG",WHITE);
+  fieldBox(926,92,76,27,"right",pad3(hdg));
+  fieldBox(1020,92,62,27,"left",S.onGround?"IAS":"TAS",WHITE);
+  fieldBox(1086,92,116,27,"right",pad3((t.speedMps||0)*1.94384)+"KT");
+  fieldBox(860,124,62,26,"left","ALT",WHITE);
+  fieldBox(926,124,134,26,"right",pad5((t.altitudeM||0)*3.28084));
+  fieldBox(1090,124,60,26,"left","JP8",WHITE);
+  fieldBox(1150,124,146,26,"right",pad3(S.fuel)+"L");
+
+  /* sol üst: systems / engine switch / fuel type */
+  const warn=S.warn;
+  ctx.fillStyle=warn?"#261a06":DARK;ctx.fillRect(58,392,102,40);
+  fieldBox(62,394,94,32,"center",warn||"SYSTEMS",warn?AMBER:GREEN);
+  ctx.fillStyle=DARK;ctx.fillRect(58,452,102,48);
+  fieldBox(62,456,94,38,"center",{RUNNING:"RUN",STARTING:"START",STOPPING:"STOP"}[S.engine]||"OFF",WHITE);
+  ctx.fillStyle=DARK;ctx.fillRect(58,522,102,46);
+  fieldBox(62,526,94,34,"center",S.fuel<30?"LOW FUEL":"JP-8",S.fuel<30?AMBER:WHITE);
+
+  /* ARM (35,204,140,156) */
+  ctx.fillStyle=S.armed?"#261806":DARK;ctx.fillRect(35,204,140,156);
+  ctx.strokeStyle=S.armed?AMBER:"#16321a";ctx.lineWidth=2;ctx.strokeRect(35,204,140,156);
+  fieldBox(40,226,130,26,"center","ARM",S.armed?AMBER:"#3a5c2a");
+  fieldBox(40,258,130,34,"center",S.armed?"ON":"SAFE",S.armed?AMBER:WHITE);
+  ctx.font="600 15px Consolas";ctx.fillStyle="#3a5c2a";ctx.textAlign="center";
+  ctx.fillText("MASTER",105,318);ctx.fillText("SWITCH",105,340);
+
+  /* NAV (248,200,372,376) */
+  ctx.fillStyle=DARK;ctx.fillRect(248,200,372,376);
+  fieldBox(260,212,244,32,"left","CCIP / NAV");fieldBox(520,212,84,32,"right","N-UP");
+  line(260,250,604,250,BARCOL,2);
+  drawTrack(266,258,338,207);
+  fieldBox(260,479,58,30,"left","TTG",WHITE);
+  fieldBox(320,479,98,30,"right",S.impactT>0.2?S.impactT.toFixed(1)+"S":"--.-S");
+  fieldBox(436,479,56,30,"left","RNG",WHITE);
+  fieldBox(494,479,110,30,"right",S.impactT>0.2?Math.round(S.impactRng)+"M":"---M");
+  fieldBox(260,516,167,28,"left","X "+Math.round(S.x),WHITE);
+  fieldBox(437,516,167,28,"right","Y "+Math.round(S.y),WHITE);
+  const inh=S.z<ROCKET_MIN_ALT||S.rockets<=0;
+  fieldBox(260,550,344,28,"center",inh?"RELEASE INHIBITED":"GROUND ESTIMATE",inh?AMBER:GREEN);
+
+  /* 4 dials */
+  dial(786,332,92,clamp((t.speedMps||0)*1.94384/800,0,1));
+  fieldBox(738,284,96,24,"center","KNOTS",WHITE);
+  fieldBox(740,360,92,30,"center",pad3((t.speedMps||0)*1.94384));
+  attitude(980,332,92);
+  fieldBox(938,360,84,22,"center",(S.pitch>=0?"U":"D")+String(Math.abs(Math.round(t.nosePitchDeg||0))).padStart(2,"0")+" "
+    +(S.bank>=0?"R":"L")+String(Math.abs(Math.round(t.bankDeg||0))).padStart(2,"0"),WHITE);
+  dial(1180,332,92,clamp((t.altitudeM||0)*3.28084/20000,0,1));
+  fieldBox(1132,284,96,24,"center","ALT FT",WHITE);
+  fieldBox(1134,360,92,30,"center",pad5((t.altitudeM||0)*3.28084));
+  dial(1374,332,92,clamp(((t.verticalSpeedMps||0)+25)/50,0,1));
+  fieldBox(1332,286,84,25,"center","V/S",WHITE);
+  fieldBox(1332,358,84,28,"center",((t.verticalSpeedMps||0)>=0?"+":"")+(t.verticalSpeedMps||0).toFixed(1));
+
+  /* STORES (1540,200,370,376) */
+  ctx.fillStyle=DARK;ctx.fillRect(1540,200,370,376);
+  fieldBox(1552,212,228,32,"left","A-G / STORES");fieldBox(1790,212,104,32,"right","LIVE");
+  line(1552,250,1894,250,BARCOL,2);
+  fieldBox(1552,268,150,34,"left","M61",WHITE);fieldBox(1710,268,94,34,"right",String(S.gunRounds));
+  fieldBox(1552,318,150,34,"left","DROPS",WHITE);fieldBox(1710,318,94,34,"right",String(S.rockets));
+  fieldBox(1552,368,150,34,"left","FLARES",WHITE);fieldBox(1710,368,94,34,"right",String(S.flares));
+  fieldBox(1552,418,88,34,"left","ARM",WHITE);fieldBox(1646,418,158,34,"right",S.armed?"ON":"SAFE",S.armed?GREEN:AMBER);
+  const st=ALERTS[S.weaponStatus]||"READY";
+  fieldBox(1552,478,342,34,"center",st,st!=="READY"?AMBER:GREEN);
+  line(1552,523,1894,523,BARCOL,2);
+  fieldBox(1552,535,150,31,"left","CANOPY",WHITE);
+  fieldBox(1710,535,184,31,"right",S.canopy>0.05?"OPEN":"CLOSED",S.canopy>0.05?AMBER:GREEN);
+
+  /* 4 lower wells: RPM/THR/FUEL/GUN */
+  const wells=[
+    [724,466,148,134,"ENGINE",({RUNNING:"RUN",STARTING:"START",STOPPING:"STOP"})[S.engine]||"OFF","RPM %",S.spool],
+    [918,466,142,136,null,null,"THR %",S.thrSpool],
+    [1100,466,142,136,null,null,"FUEL %",S.fuel/FUEL_MAX],
+    [1288,466,148,136,null,null,"GUN",S.gunRounds/GUN_MAX]];
+  wells.forEach(w=>{
+    const[x,y,we,h,lab,val,lab2,val2]=w;
+    ctx.fillStyle=DARK;ctx.fillRect(x,y,we,h);
+    if(lab){fieldBox(x+8,y+8,we-16,22,"center",lab,WHITE);fieldBox(x+8,y+30,we-16,20,"center",val,WHITE);}
+    fieldBox(x+8,y+44,we-16,20,"center",lab2,WHITE);
+    fieldBox(x+8,y+94,we-16,30,"center",pad3(val2*100));
+    vbar(x+12,y+68,16,56,val2);
+  });
+
+  /* sağ şerit: fuel lbs / bar / flow (2002..) */
+  ctx.font="600 14px Consolas";ctx.fillStyle="#3a5c2a";ctx.textAlign="center";
+  ctx.fillText("FUEL LBS",2048,228);
+  fieldBox(2002,238,94,40,"center",pad4(S.fuel*1.764));
+  ctx.fillStyle=DARK;ctx.fillRect(2004,296,92,170);
+  vbar(2014,300,72,162,S.fuel/FUEL_MAX);
+  ctx.fillText("FLOW LB/H",2048,548);
+  fieldBox(2002,556,94,42,"center",pad4(S.flowDisplay*(1+S.abSpool)));
+  ctx.fillText("AB "+Math.round(S.abSpool*100)+"%",2048,640);
+
+  /* alt bilgi */
+  ctx.font="600 20px Consolas";ctx.fillStyle="#16321a";ctx.textAlign="left";
+  ctx.fillText("KNOX FALCON · MCK AVIATION mod sim — telemetry schema v1",24,700);
+}
+function pad4(v){return String(Math.max(0,Math.round(v))).padStart(4,"0");}
+
+/* ================= HUD STRIP ================= */
+function updHud(){
+  const t=S.telemCache;if(!t)return;
+  const kmh=t.speedKmh;
+  $("hudbar").textContent=
+"IAS "+Math.abs(kmh/1.852).toFixed(0)+" KT / "+(kmh>=0?"+":"")+kmh.toFixed(0)+" km/h   ALT "+Math.round(t.altitudeM*3.28084)+" FT / "+t.altitudeM.toFixed(0)+" m\n"+
+"PITCH "+t.nosePitchDeg.toFixed(0)+"   BANK "+t.bankDeg.toFixed(0)+"   V/S "+t.verticalSpeedMps.toFixed(1)+" m/s   AOA "+t.aoaDeg.toFixed(1)+"   G "+t.loadFactorG.toFixed(2)+"\n"+
+"ENG "+S.engine+"   RPM "+pad3(S.spool*100)+"%   THR "+pad3(S.thrSpool*100)+"%   FUEL "+S.fuel.toFixed(1)+" / "+FUEL_MAX+" L   HDG "+pad3(t.headingDeg)+"   CANOPY "+(S.canopy>0.05?"OPEN / MOVING":"CLOSED")+"\n"+
+"ARM "+(S.armed?"ON":"SAFE")+"   M61 "+S.gunRounds+"   DROPS "+S.rockets+"   FLARES "+S.flares+"   TTG "+(S.impactT>0.2?S.impactT.toFixed(1)+"S":"--")+"   RNG "+(S.impactT>0.2?Math.round(S.impactRng)+"M":"--");
+}
+function updQuick(){
+  const t=S.telemCache||{loader:0};
+  $("qEng").textContent=S.engine;$("qEng").style.color=S.engine==="RUNNING"?"var(--green)":"var(--amber)";
+  $("qRpm").textContent=pad3(S.spool*100);
+  $("qThr").textContent=pad3(S.thrSpool*100);
+  $("qAb").textContent=pad3(S.abSpool*100);
+  $("qFuel").textContent=S.fuel.toFixed(1);
+  $("qFlow").textContent=Math.round(S.flowDisplay);
+  const c=$("qCan");c.textContent=S.canopy>0.05?"OPEN":"CLOSED";c.style.color=S.canopy>0.05?"var(--amber)":"var(--green)";
+  const a=$("qArm");a.textContent=S.armed?"ON":"SAFE";a.style.color=S.armed?"var(--green)":"var(--amber)";
+  $("qGun").textContent=S.gunRounds+" / "+GUN_MAX;
+  $("qRocket").textContent=S.rockets+" / "+ROCKET_MAX;
+  $("qFlare").textContent=S.flares+" / "+FLARE_MAX;
+  $("statusbar").textContent="STATUS "+S.status+(S.warn?"   ⚠ "+S.warn:"")+"   MACH "+(S.mach||0).toFixed(3)+"   AOA "+((t.aoaDeg)||0).toFixed(1)+"°   G "+(t.loadFactorG||1).toFixed(2);
+  const sb=$("statusbar");
+  sb.style.color=S.stall?"var(--red)":S.mach>0.98?"var(--red)":S.onGround?"var(--amber)":"var(--green)";
+  $("qTtg").textContent=S.impactT>0.2?S.impactT.toFixed(1)+" s":"—";
+  $("qRng").textContent=S.impactT>0.2?Math.round(S.impactRng)+" m":"—";
+  const inh=S.z<ROCKET_MIN_ALT||S.rockets<=0;
+  $("qNav").textContent=inh?"RELEASE INHIBITED":"GROUND ESTIMATE";
+  $("qNav").style.color=inh?"var(--amber)":"var(--green)";
+  $("capPhase").textContent=S.status;
+  $("thrVal").textContent="%"+pad3(S.thrSpool*100);
+  renderPartsQuick();
+}
+function renderPartsQuick(){
+  $("partsQuick").innerHTML=
+    '<span class="k">ENGINE</span><span></span><span style="color:'+(S.parts.Engine<80?"var(--amber)":"var(--green)")+'">'+Math.round(S.parts.Engine)+"%</span>"+
+    '<span class="k">HYDRAULIC</span><span></span><span style="color:'+(S.parts.FlightHydraulics<80?"var(--amber)":"var(--green)")+'">'+Math.round(S.parts.FlightHydraulics)+"%</span>"+
+    '<span class="k">TIRES</span><span></span><span style="color:var(--green)">'+Math.round(S.parts.TireFrontLeft)+"/"+Math.round(S.parts.TireRearLeft)+"/"+Math.round(S.parts.TireRearRight)+"</span>";
+}
+
+/* ================= SERVİS ================= */
+let selectedPart=0;
+function renderSvc(){
+  $("svcParts").innerHTML='<tr><th>KATEGORİ</th><th>KOMPONENT</th><th style="text-align:right">DURUM</th></tr>'+
+    PARTS.map((p,i)=>{
+      const v=S.parts[p[0]]||0;
+      return '<tr data-i="'+i+'" class="'+(i===selectedPart?"sel":"")+'"><td>'+p[2]+"</td><td>"+p[1]+
+      '</td><td class="cond '+(v<50?"c":v<90?"w":"")+'">'+Math.round(v)+"%</td></tr>";
+    }).join("");
+  [...$("svcParts").querySelectorAll("tr[data-i]")].forEach(tr=>tr.addEventListener("click",()=>{selectedPart=+tr.dataset.i;renderSvc();}));
+}
+function openService(){$("mService").classList.add("open");renderSvc();$("svcMsg").textContent="";}
+$("btnService").onclick=openService;
+$("btnService2").onclick=openService;
+$("btnServiceClose").onclick=()=>$("mService").classList.remove("open");
+$("svcFix").onclick=()=>{const p=PARTS[selectedPart];S.parts[p[0]]=100;renderSvc();renderPartsQuick();$("svcMsg").textContent=p[1]+" serviced → %100.";};
+$("svcRefuel").onclick=()=>{S.fuel=Math.min(FUEL_MAX,S.fuel+50);$("svcMsg").textContent="JP-8 eklendi: "+S.fuel.toFixed(1)+" / "+FUEL_MAX+" L";};
+$("svcAmmo").onclick=()=>{S.gunRounds=GUN_MAX;$("svcMsg").textContent="20 mm yüklendi: "+GUN_MAX+" mermi";};
+$("svcRocket").onclick=()=>{S.rockets=ROCKET_MAX;$("svcMsg").textContent="Roket yüklendi: "+ROCKET_MAX;renderPartsQuick();};
+$("svcFlare").onclick=()=>{S.flares=FLARE_MAX;$("svcMsg").textContent="Flare yüklendi: "+FLARE_MAX;renderPartsQuick();};
+
+/* ================= KAYIT DIŞA / EXPORT ================= */
+const CSV_COLS=["t","status","simTimeSeconds","speedMps","speedKmh","mach","altitudeM","verticalSpeedMps",
+"nosePitchDeg","bankDeg","headingDeg","aoaDeg","loadFactorG","throttlePct","afterburnerPct","dynamicPressurePa"];
+function toggleRecord(){
+  S.record.on=!S.record.on;
+  if(S.record.on){S.record.startedAt=S.simTime;S.record.samples.length=0;}
+  log("TELEMETRY",S.record.on?"kayıt BAŞLADI ("+S.record.every+" s / örnek)":"kayıt DURDURULDU","gn");
+  updRecButtons();
+}
+function updRecButtons(){
+  $("btnRecord").classList.toggle("active",S.record.on);
+  $("btnRec2").classList.toggle("active",S.record.on);
+  $("btnRec2").textContent=S.record.on?"■ Kayıt durdur":"● Kayıt başlat";
+}
+$("btnRecord").onclick=toggleRecord;
+$("btnRec2").onclick=toggleRecord;
+$("btnClear2").onclick=()=>{S.record.samples=[];$("recInfo").textContent="temizlendi";};
+function download(name,text,mime){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type:mime}));
+  a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+function exportCSV(){
+  const ss=S.record.samples;
+  if(!ss.length){alert("Örnek yok — önce ● KAYIT başlat.");return;}
+  const csv=CSV_COLS.join(",")+"\n"+ss.map(s=>{
+    return CSV_COLS.map(c=>{
+      const v=s[c];
+      return typeof v==="number"?+v.toFixed(3):String(v).replace(/,/g,";");
+    }).join(",");
+  }).join("\n");
+  download("knoxfalcon_telemetry_"+Date.now()+".csv",csv,"text/csv");
+}
+function exportJSON(){
+  const ss=S.record.samples;
+  if(!ss.length){alert("Örnek yok — önce ● KAYIT başlat.");return;}
+  const data={meta:{mod:"MCK-Aviation / KnoxFalcon 0.2",flightEngine:"0.5.6",telemetrySchema:1,
+    samplingEveryS:S.record.every,sampleCount:ss.length,
+    firstT:ss[0].t,lastT:ss[ss.length-1].t},
+    summary:S.stats,
+    samples:ss};
+  download("knoxfalcon_telemetry_"+Date.now()+".json",JSON.stringify(data,null,1),"application/json");
+}
+$("btnExpCSV").onclick=exportCSV;
+$("btnExpJSON").onclick=exportJSON;
+
+/* ================= ANALİZ ================= */
+const CHARTS=[
+  ["speedMps","TAS m/s"],["altitudeM","ALTITUDE m"],["verticalSpeedMps","V/S m/s"],
+  ["aoaDeg","AOA deg"],["loadFactorG","G (9 / 3 çizgili)"],["throttlePct","THROTTLE %"],
+  ["mach","MACH"],["nosePitchDeg","PITCH deg"],["bankDeg","BANK deg"]];
+function openAnalysis(){
+  const ss=S.record.samples,st=S.stats;
+  $("mAnalysis").classList.add("open");
+  const dur=ss.length?(ss[ss.length-1].t-ss[0].t).toFixed(0):0;
+  const stHTML=[
+    ["UÇUŞ SÜRESİ",dur+" s"],["MAX MACH",Math.max(0,st.maxMach).toFixed(3)],
+    ["MAX HIZ",Math.round(st.maxIAS)+" km/h"],["MAX G",st.maxG.toFixed(2)],
+    ["MAX ALT",Math.round(Math.max(0,st.maxAlt))+" m"],["STALL",String(st.stalls)],
+    ["HARD LANDING",String(st.hardLandings)],["JP-8 HARCANAN",st.fuelUsed.toFixed(1)+" L"],
+    ["M61",st.gunFired+" rnd"],["ROKET",String(st.rocketsAway)],["FLARE",String(st.flaresAway)],
+    ["MAX V/S ↑",st.maxVs.toFixed1?st.maxVs.toFixed(1):st.maxVs.toFixed(1)+" m/s"],
+    ["MIN V/S ↓",st.minVs.toFixed(1)+" m/s"],["MAX THR",Math.round(st.maxThrottle)+"%"],["ÖRNEK SAYISI",String(ss.length)]
+  ];
+  $("anaStats").innerHTML=stHTML.map(s=>'<div class="stat"><div class="l">'+s[0]+'</div><div class="v">'+s[1]+"</div></div>").join("");
+  $("anaSub").textContent=ss.length>
+    0?(ss.length+" örnek · "+dur+" s · "+S.record.every+" s periyot"):  "Kayıt yok — ● KAYIT (T) ile başlat.";
+  const wrap=$("anaCharts");wrap.innerHTML="";
+  if(ss.length<2){
+    wrap.innerHTML='<div class="note">Kayıt çok kısa (<2 örnek). KAYIT başlat, uçuş yap, sonra tekrar ANALİZ.</div>';
+    return;
+  }
+  CHARTS.forEach(ch=>{
+    const fig=document.createElement("figure");
+    fig.innerHTML='<figcaption><span>'+ch[1]+'</span></figcaption><canvas width="520" height="120"></canvas>';
+    wrap.appendChild(fig);
+    drawChart(fig.querySelector("canvas"),ss,ch[0]);
+  });
+}
+function drawChart(cvv,ss,field){
+  const c=cvv.getContext("2d"),W=cvv.width,H=cvv.height,pad={l:52,r:8,t:8,b:14};
+  const vals=ss.map(s=>+(s[field]||0).toFixed(3));
+  let mn=Math.min(...vals),mx=Math.max(...vals);
+  if(mn===mx){mn-=1;mx+=1;}
+  const pd=(mx-mn)*0.08;mn-=pd;mx+=pd;
+  c.fillStyle="#060d07";c.fillRect(0,0,W,H);
+  c.font="9px monospace";c.textAlign="right";c.textBaseline="middle";
+  for(let i=0;i<=3;i++){
+    const y=pad.t+(H-pad.t-pad.b)*i/3;
+    c.strokeStyle="#16321a";c.lineWidth=1;
+    c.beginPath();c.moveTo(pad.l,y);c.lineTo(W-pad.r,y);c.stroke();
+    c.fillStyle="#5c8f4a";c.fillText((mx-(mx-mn)*i/3).toFixed(Math.abs(mx-mn)<4?2:0),pad.l-4,y);
+  }
+  const X=i=>pad.l+(W-pad.l-pad.r)*i/(vals.length-1);
+  const Y=v=>pad.t+(H-pad.t-pad.b)*(1-(v-mn)/(mx-mn));
+  if(field==="loadFactorG"){
+    c.strokeStyle="#7a2020";c.setLineDash([3,3]);
+    [3,9].forEach(v=>{if(v>mn&&v<mx){c.beginPath();c.moveTo(pad.l,Y(v));c.lineTo(W-pad.r,Y(v));c.stroke();}});
+    c.setLineDash([]);
+  }
+  c.beginPath();
+  vals.forEach((v,i)=>{i?c.lineTo(X(i),Y(v)):c.moveTo(X(i),Y(v));});
+  c.strokeStyle=field==="loadFactorG"?"#ff6b6b":field==="altitudeM"?"#7fd8ff":GREEN;
+  c.lineWidth=1.6;c.stroke();
+  c.fillStyle="#2a5533";c.font="8.5px monospace";c.textAlign="center";
+  c.fillText(String(Math.round(+ss[0].t))+"s",pad.l+14,H-6);
+  c.fillText(String(Math.round(+ss[ss.length-1].t))+"s",W-pad.r-16,H-6);
+}
+$("btnAnalysis").onclick=openAnalysis;
+$("btnAnalysisClose").onclick=()=>$("mAnalysis").classList.remove("open");
+$("btnAnaExport").onclick=exportCSV;
+document.querySelectorAll(".modal").forEach(mm=>mm.addEventListener("mousedown",e=>{if(e.target===mm)mm.classList.remove("open");}));
+
+/* ================= 3B SAHNE — kendi perspektif render'ımız =================
+   Kokpit / kuyruk kamera: F-16 mesh + pist + binalar + tepeler + deniz.  */
+const sceneCv=$("scene"),sctx=sceneCv.getContext("2d");
+let sceneView="cockpit";
+function fitScene(){
+  const r=sceneCv.getBoundingClientRect();
+  sceneCv.width=Math.max(360,r.width|0);sceneCv.height=Math.max(220,r.height|0);
+}
+window.addEventListener("resize",fitScene);
+function updViewLabel(){$("btnView").textContent="GÖRÜŞ: "+(sceneView==="cockpit"?"KOKPİT":"KUYRUK");}
+updViewLabel();
+$("btnView").onclick=()=>{sceneView=(sceneView==="chase")?"cockpit":"chase";updViewLabel();};
+
+const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/l,v[1]/l,v[2]/l];};
+const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const dot3=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const sub3=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const LIT=norm([-0.35,0.5,0.78]);
+let cam={p:[0,0,10],L:[0,1,0],R:[1,0,0],U:[0,0,1],k:600,W:900,H:500};
+let acF=[0,1,0],acR=[1,0,0],acU=[0,0,1]; // uçak gövde çerçevesi (ileri/sağ/yukarı)
+function updateCam(){
+  const cp=Math.cos(S.pitch),sp=Math.sin(S.pitch);
+  const F=[cp*Math.sin(S.heading),cp*Math.cos(S.heading),sp];
+  const R0=norm(cross3(F,[0,0,1]));
+  const U0=norm(cross3(R0,F));
+  const cb=Math.cos(S.bank),sb=Math.sin(S.bank);
+  acF=F;
+  acR=[cb*R0[0]-sb*U0[0],cb*R0[1]-sb*U0[1],cb*R0[2]-sb*U0[2]];
+  acU=[cb*U0[0]+sb*R0[0],cb*U0[1]+sb*R0[1],cb*U0[2]+sb*R0[2]];
+  const P=[S.x,S.y,S.z];
+  let camP,look;
+  if(sceneView==="chase"){
+    const Fh=norm([Math.sin(S.heading),Math.cos(S.heading),0]);
+    camP=[P[0]-Fh[0]*27,P[1]-Fh[1]*27,S.z+8];
+    look=[P[0]+F[0]*45,P[1]+F[1]*45,P[2]+F[2]*45];
+  }else{
+    /* pilot göz hizası: kanopi bölgesi (l≈4.2, üst) */
+    camP=[P[0]+F[0]*4.2+acU[0]*0.62,P[1]+F[1]*4.2+acU[1]*0.62,P[2]+F[2]*4.2+acU[2]*0.62];
+    look=[P[0]+F[0]*80,P[1]+F[1]*80,P[2]+F[2]*80+acU[2]*8];
+  }
+  const L=norm(sub3(look,camP));
+  cam={p:camP,L,R:acR,U:acU,k:sceneCv.height*1.15,W:sceneCv.width,H:sceneCv.height};
+}
+function proj(Q){
+  const d=sub3(Q,cam.p);
+  const z=dot3(d,cam.L);if(z<4)return null;
+  return [cam.W/2+cam.k*dot3(d,cam.R)/z, cam.H/2-cam.k*dot3(d,cam.U)/z];
+}
+function poly(pts,fill,stroke){
+  let ok=true;const pr=[];
+  for(const p of pts){const q=proj(p);if(!q){ok=false;break;}pr.push(q);}
+  if(!ok||pr.length<3)return;
+  sctx.beginPath();sctx.moveTo(pr[0][0],pr[0][1]);
+  for(let i=1;i<pr.length;i++)sctx.lineTo(pr[i][0],pr[i][1]);
+  sctx.closePath();
+  if(fill){sctx.fillStyle=fill;sctx.fill();}
+  if(stroke){sctx.strokeStyle=stroke;sctx.lineWidth=1;sctx.stroke();}
+}
+function shade(facePts,rgb){
+  const n=norm(cross3(sub3(facePts[1],facePts[0]),sub3(facePts[2],facePts[0])));
+  const f=0.62+0.38*Math.max(0,dot3(n,LIT));
+  return "rgb("+Math.round(rgb[0]*f)+","+Math.round(rgb[1]*f)+","+Math.round(rgb[2]*f)+")";
+}
+/* --- dünya objeleri --- */
+const HILLS=[
+  {x:-2400,y:2700,r:1000,h:470,c:[74,116,58]},{x:2500,y:2100,r:800,h:330,c:[70,110,53]},
+  {x:1600,y:5300,r:1150,h:560,c:[69,108,49]},{x:-2900,y:5200,r:1050,h:500,c:[69,104,48]},
+  {x:4200,y:3400,r:1300,h:540,c:[66,102,47]},{x:-4400,y:3900,r:1200,h:500,c:[72,110,55]}];
+const BUILDINGS=[];
+(function buildTown(){
+  let rnd=7;const r=()=>((rnd=(rnd*16807)%2147483647)/2147483647);
+  for(let i=0;i<14;i++){const side=i%2?1:-1;
+    BUILDINGS.push({x:(140+r()*280)*side,y:520+r()*1900,w:28+r()*46,d:28+r()*46,h:18+r()*64,
+      c:[132+(r()*30|0),140+(r()*26|0),146]});
+  }
+})();
+function worldFace(list,rgb,stroke){
+  if(rgb&&rgb.length===3)poly(list,shade(list,rgb),stroke);
+  else poly(list,rgb,stroke);
+}
+function drawScene(){
+  fitScene();updateCam();
+  const W=cam.W,H=cam.H;
+  /* gökyüzü */
+  const g=sctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#0a2030");g.addColorStop(0.55,"#2a5a80");g.addColorStop(1,"#77a8c4");
+  sctx.fillStyle=g;sctx.fillRect(0,0,W,H);
+  /* güneş */
+  sctx.fillStyle="rgba(255,244,214,0.9)";sctx.beginPath();sctx.arc(W*0.72,H*0.24,26,0,7);sctx.fill();
+  /* zemin diski (sabit merkez 0,0) */
+  const gr=[];for(let i=0;i<26;i++){const a=i/26*Math.PI*2;gr.push([Math.cos(a)*8200,Math.sin(a)*8200,0]);}
+  poly(gr,"#3f6d33","#35602a");
+  /* deniz halkası */
+  const sea=[];for(let i=0;i<26;i++){const a=i/26*Math.PI*2;
+    sea.push([Math.cos(a)*9000,Math.sin(a)*9000,0]);}
+  for(let i=25;i>=0;i--){const a=i/26*Math.PI*2;sea.push([Math.cos(a)*16000,Math.sin(a)*16000,0]);}
+  poly(sea,"#1d5b86","#175080");
+  /* pist */
+  poly([[-36,-220,0],[36,-220,0],[36,2700,0],[-36,2700,0]],"#3a3f44");
+  poly([[-40,-224,0],[40,-224,0],[40,-218,0],[-40,-218,0]],"#565b60");
+  for(let y=-160;y<2600;y+=140)poly([[-2.2,y,0.05],[2.2,y,0.05],[2.2,y+70,0.05],[-2.2,y+70,0.05]],"#b8bdbd");
+  /* binalar (uzak→ yakın sıralı) */
+  const bds=[...BUILDINGS].sort((a,b)=>Math.hypot(b.x-S.x,b.y-S.y)-Math.hypot(a.x-S.x,a.y-S.y));
+  for(const b of bds){
+    const x0=b.x-b.w/2,x1=b.x+b.w/2,y0=b.y-b.d/2,y1=b.y+b.d/2;
+    const v={pNw:[x0,y0,b.h],pNe:[x1,y0,b.h],pSe:[x1,y1,b.h],pSw:[x0,y1,b.h],
+      bNw:[x0,y0,0],bNe:[x1,y0,0],bSe:[x1,y1,0],bSw:[x0,y1,0]};
+    const c=[b.c[0],b.c[1],b.c[2]],cd=[c[0]*0.55|0,c[1]*0.55|0,c[2]*0.55|0];
+    worldFace([v.pNw,v.pNe,v.bNe,v.bNw],cd);
+    worldFace([v.pNe,v.pSe,v.bSe,v.bNe],cd);
+    worldFace([v.pSe,v.pSw,v.bSw,v.bSe],cd);
+    worldFace([v.pSw,v.pNw,v.bNw,v.bSw],cd);
+    worldFace([v.pNw,v.pNe,v.pSe,v.pSw],[Math.min(255,c[0]+18),Math.min(255,c[1]+18),Math.min(255,c[2]+18)]);
+  }
+  /* tepeler (koni) — uzaktan yakına */
+  const hs=[...HILLS].sort((a,b)=>Math.hypot(b.x-S.x,b.y-S.y)-Math.hypot(a.x-S.x,a.y-S.y));
+  for(const hh of hs){
+    const ring=[];for(let i=0;i<8;i++){const a=i/8*Math.PI*2;
+      ring.push([hh.x+Math.cos(a)*hh.r,hh.y+Math.sin(a)*hh.r,0]);}
+    const apex=[hh.x,hh.y,hh.h];
+    for(let i=0;i<8;i++)worldFace([ring[i],ring[(i+1)%8],apex],hh.c);
+  }
+  /* --- F-16 mesh (yalnız kuyruk/chase görüşünde) --- */
+  const P=(lx,ly,lz)=>[S.x+acF[0]*lx+acR[0]*ly+acU[0]*lz,
+                       S.y+acF[1]*lx+acR[1]*ly+acU[1]*lz,
+                       S.z+acF[2]*lx+acR[2]*ly+acU[2]*lz];
+  if(sceneView==="chase"){
+  const GREY=[150,162,168],GREY2=[128,140,146],TIP=[186,196,200];
+  const st=[[7.3,0.28,0.18,0.25],[6.2,0.55,0.42,0.28],[4.6,0.62,0.55,0.30],[2.0,0.72,0.60,0.28],
+    [-0.6,0.78,0.55,0.25],[-3.0,0.70,0.50,0.22],[-5.0,0.58,0.44,0.20],[-6.5,0.40,0.30,0.16]];
+  const rings=st.map(s=>{const q=[];
+    for(let i=0;i<6;i++){const th=i/6*Math.PI*2;
+      q.push(P(s[0],Math.cos(th)*s[1],Math.sin(th)*s[2]+s[3]));}
+    return q;});
+  for(let s=0;s<rings.length-1;s++)for(let i=0;i<6;i++){
+    const topFace=i<2||i>=4;
+    worldFace([rings[s][i],rings[s+1][i],rings[s+1][(i+1)%6],rings[s][(i+1)%6]],topFace?GREY:GREY2);
+  }
+  /* kokpit kanopi (üst yarı halka) */
+  const cst=[[2.7,0.26,0.52,0.30],[3.4,0.30,0.62,0.30],[4.7,0.27,0.55,0.30],[5.7,0.18,0.32,0.30]];
+  const crings=cst.map(s0=>{const q=[];
+    for(let i=0;i<=4;i++){const th=Math.PI*(1-i/4);
+      q.push(P(s0[0],Math.cos(th)*s0[1],Math.sin(th)*s0[2]+s0[3]));}
+    return q;});
+  for(let s=0;s<crings.length-1;s++)for(let i=0;i<4;i++)
+    worldFace([crings[s][i],crings[s+1][i],crings[s+1][i+1],crings[s][i+1]],[45,84,102]);
+  /* kanatlar */
+  for(const sgn of [1,-1]){
+    worldFace([P(2.8,sgn*0.5,0.36),P(0.9,sgn*5.1,0.18),P(-0.6,sgn*5.1,0.15),P(0.5,sgn*0.5,0.12)],TIP);
+    worldFace([P(2.8,sgn*0.5,-0.05),P(0.5,sgn*0.5,-0.08),P(-0.6,sgn*5.1,-0.02),P(0.9,sgn*5.1,-0.02)],GREY2);
+  }
+  /* kuyrkJü stabilizatörler */
+  for(const sgn of [1,-1])
+    worldFace([P(-2.7,sgn*0.45,0.3),P(-4.4,sgn*2.15,0.1),P(-5.15,sgn*2.15,0.07),P(-4.2,sgn*0.45,0.05)],GREY);
+  /* dikey kuyruk */
+  worldFace([P(-2.4,0,0.55),P(-5.1,0,0.55),P(-5.7,0,2.6),P(-3.1,0,2.8)],GREY);
+  worldFace([P(-2.4,0.09,0.55),P(-5.1,0.09,0.55),P(-5.7,0.09,2.6),P(-3.1,0.09,2.8)],TIP);
+  /* motor nozulu karanlık */
+  const nr=[];for(let i=0;i<6;i++){const th=i/6*Math.PI*2;
+    nr.push(P(-6.5,Math.cos(th)*0.36,Math.sin(th)*0.26+0.16));}
+  const nr2=nr.map(q=>[q[0]-acF[0]*0.7,q[1]-acF[1]*0.7,q[2]-acF[2]*0.7]);
+  for(let i=0;i<6;i++)worldFace([nr[i],nr[(i+1)%6],nr2[(i+1)%6],nr2[i]],[52,58,62]);
+  /* konum gölgesi */
+  if(S.z<400){const sh=[];for(let i=0;i<10;i++){const a=i/10*Math.PI*2;
+    sh.push([S.x+Math.cos(a)*7,S.y+Math.sin(a)*7,0.1]);}poly(sh,"rgba(10,14,10,0.35)");}
+  }else{
+    /* kokpit: tasarımdan bağımsız kanopi çerçevesi */
+    sctx.strokeStyle="rgba(30,44,54,0.95)";sctx.lineWidth=7;
+    sctx.beginPath();sctx.moveTo(0,H*0.62);sctx.lineTo(W*0.16,H*0.30);sctx.lineTo(W*0.28,H*0.66);
+    sctx.moveTo(W,H*0.62);sctx.lineTo(W*0.84,H*0.30);sctx.lineTo(W*0.72,H*0.66);sctx.stroke();
+    sctx.lineWidth=3;sctx.beginPath();sctx.moveTo(W*0.24,H*0.06);sctx.lineTo(W*0.26,H*0.34);
+    sctx.moveTo(W*0.76,H*0.06);sctx.lineTo(W*0.74,H*0.34);sctx.stroke();
+    /* kanat ucu referansları */
+    sctx.strokeStyle="rgba(140,150,155,0.8)";sctx.lineWidth=2;
+    sctx.beginPath();sctx.moveTo(0,H*0.71);sctx.lineTo(W*0.12,H*0.64);sctx.stroke();
+    sctx.beginPath();sctx.moveTo(W,H*0.71);sctx.lineTo(W*0.88,H*0.64);sctx.stroke();
+  }
+  /* kokpit HUD overlay */
+  sctx.fillStyle="rgba(158,255,61,0.95)";sctx.strokeStyle="rgba(158,255,61,0.8)";sctx.lineWidth=1.5;
+  if(sceneView==="cockpit"){
+    const cx=W/2,cy=H/2;
+    sctx.beginPath();sctx.moveTo(cx-30,cy);sctx.lineTo(cx-8,cy);sctx.moveTo(cx+8,cy);sctx.lineTo(cx+30,cy);
+    sctx.moveTo(cx,cy-24);sctx.lineTo(cx,cy-8);sctx.stroke();
+    sctx.beginPath();sctx.arc(cx,cy,10,0,7);sctx.stroke();
+    sctx.font="600 13px Consolas,monospace";sctx.textAlign="left";
+    sctx.fillText("IAS "+Math.round((S.telemCache?S.telemCache.speedMps:0)*1.94384)+" KT",14,H-34);
+    sctx.fillText("ALT "+Math.round((S.telemCache?S.telemCache.altitudeM:0)*3.28084)+" FT",14,H-16);
+    sctx.textAlign="right";
+    sctx.fillText("MACH "+(S.mach||0).toFixed(2),W-14,H-34);
+    sctx.fillText("AOA "+((S.telemCache?S.telemCache.aoaDeg:0)||0).toFixed(1)+"°  G "+(S.telemCache?S.telemCache.loadFactorG:1).toFixed(1),W-14,H-16);
+    sctx.textAlign="center";
+    sctx.fillText("HDG "+String(Math.round(((S.heading*57.29578)%360+360)%360)).padStart(3,"0"),cx,22);
+  }else{
+    sctx.font="600 12px Consolas,monospace";sctx.textAlign="left";
+    sctx.globalAlpha=0.75;
+    sctx.fillText("KUYRU K GÖRÜŞ — köpik için düğme",14,H-12);sctx.globalAlpha=1;
+  }
+  if(S.stall){sctx.fillStyle="#ff4d4d";sctx.font="700 16px Consolas";sctx.textAlign="center";
+    sctx.fillText("STALL",W/2,H*0.3);}
+}
+
+/* ================= RAF LOOP ================= */
+let lastTS=performance.now(),acc=0,frame=0;
+function raf(now){
+  const dtR=Math.min((now-lastTS)/1000,0.25);lastTS=now;
+  acc+=dtR;
+  let guard=0;
+  while(acc>=STEP&&guard++<10){step(STEP);acc-=STEP;}
+  if(acc>STEP*4)acc=0;
+  frame++;
+  if(frame%2===0){drawScene();drawDash();updHud();updQuick();updTele();}
+  if(frame%30===0)fpsCount=Math.round(1/Math.max(dtR,0.001))+" fps";
+  $("fps").textContent=fpsCount;
+  if(S.record.on&&frame%10===0)$("recInfo").textContent="KAYIT ● "+S.record.samples.length+" örnek";
+  requestAnimationFrame(raf);
+}
+/* init */
+fitDash();fitScene();
+resetSim();
+updButtons();
+renderPartsQuick();
+updRecButtons();
+log("INFO","KNOX FALCON motoru hazır — gaz %35, motor RUNNING · W/S pitch · A/D roll · Q/E rudder","gn");
+log("INFO","Kalkış: gaz %100 → 55 m/s → S tuşu (burun yukarı). Roket için 12 m alt gerekiyor.","am");
+</script>
+</body>
+</html>
