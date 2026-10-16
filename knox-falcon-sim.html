@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Knox Falcon — F-16 Simülasyon · FE 0.5.6 · Telemetry v1</title>
+<title>Knox Falcon — F-16 Mission Simulator · FE 1.1.0</title>
 <style>
 :root{
   --bg:#040806; --panel:#071009; --line:#1d3a24; --green:#9eff3d; --dim:#5c8f4a;
@@ -22,6 +22,16 @@ header .spacer{flex:1}
 .btn{background:#0b1a0e;border:1px solid var(--line);color:var(--white);padding:4px 10px;cursor:pointer;
   font-family:inherit;font-size:11px;letter-spacing:.05em;border-radius:2px;transition:background .12s,border-color .12s;white-space:nowrap}
 .btn:hover{background:#123018;border-color:#2e5c38}
+.btn:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.btn:active{transform:translateY(1px)}
+#fleetSelect{width:100%;max-width:100%;color:#b5f3cc;background:#0d2119;border:1px solid #2b5940;
+  border-radius:5px;font:11px Consolas,monospace;padding:8px 4px;margin:6px 0;cursor:pointer}
+#aircraftMode{color:#7fd8ff;font-size:11px;font-weight:700;letter-spacing:.06em;padding:6px 0}
+#performanceWrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 12px;border-bottom:1px solid #24402e}
+#perfMode{max-width:178px;background:#092016;color:#9eff3d;border:1px solid #315742;font:10px Consolas,monospace;padding:3px 4px}
+#fpsIndicator{height:6px;width:72px;border-radius:4px;background:#24402e;overflow:hidden}
+#fpsFill{height:100%;width:0%;background:#74dba4;transition:width .4s ease}
+@media(prefers-reduced-motion:reduce){.btn,#fpsFill{transition:none}}
 .btn.primary{border-color:#3f7f28;color:var(--green)}
 .btn.warn{border-color:#7a5a10;color:var(--amber)}
 .btn.danger{border-color:#7a2020;color:var(--red)}
@@ -45,7 +55,9 @@ input[type=range]{width:100%;accent-color:var(--green)}
   background:radial-gradient(ellipse at 50% 42%,#0a150c 0%,var(--bg) 72%)}
 #sceneWrap{position:relative;height:42%;min-height:230px;background:#050a10;border-bottom:1px solid var(--line)}
 canvas#scene{width:100%;height:100%;display:block}
-#btnView{position:absolute;top:8px;right:10px;z-index:6;opacity:.85}
+#sceneWrap .scene-tools{position:absolute;top:8px;right:10px;display:flex;gap:6px;z-index:6}
+#modelInfo{position:absolute;top:9px;left:11px;z-index:2;color:#c5d5d8;background:#041018b8;padding:5px 7px;font:10px Consolas,monospace;pointer-events:none;border:1px solid #294656}
+@media(max-width:540px){#sceneWrap .scene-tools{top:32px;right:7px}#sceneWrap .scene-tools .btn{font-size:10px;padding:3px 6px}#modelInfo{font-size:9px;left:7px;top:5px}}
 canvas#dash{background:#020402;border:1px solid var(--line)}
 #hudbar{border-top:1px solid var(--line);padding:4px 12px;font-size:11.5px;color:var(--green);
   white-space:pre;line-height:1.45;overflow:auto;background:#050b07}
@@ -87,18 +99,67 @@ table.parts th{color:var(--dim);font-size:9.5px;letter-spacing:.15em;cursor:defa
 table.parts tr.sel{background:#123018;color:var(--green)}
 table.parts td.cond{text-align:right;color:var(--green)}
 table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+/* Fuel management and rendezvous indicators update only with the existing 30 Hz UI. */
+.mission-panel{border:1px solid #365466;background:linear-gradient(155deg,#09191c,#06100e);padding:9px;margin:6px 0}
+.mission-status{font-size:12px;color:var(--cyan);font-weight:bold;letter-spacing:.05em;margin-bottom:6px}
+.mission-detail{font-size:10px;line-height:1.55;color:#b6ced1;white-space:pre-wrap}
+.mission-guidance{color:var(--amber);font-size:10px;padding:5px 0;min-height:36px;line-height:1.45}
+.mission-panel .btn{white-space:normal;min-height:32px}
+.fuel-alert{color:var(--green);font-size:10px;line-height:1.4;padding:5px;border-left:2px solid #356237;margin-top:6px}
+.fuel-alert.danger{color:var(--red);border-color:var(--red)}
+.fuel-alert.warning{color:var(--amber);border-color:var(--amber)}
+/* Combat mission cards: legible, low DOM churn, static styling. */
+.combat-panel{border:1px solid #663637;background:linear-gradient(145deg,#170c0d,#080d0a);padding:9px;margin:6px 0}
+.combat-panel .btn{white-space:normal;min-height:30px}
+.combat-status{color:#ffc0a4;font-size:12px;font-weight:bold;letter-spacing:.07em;line-height:1.4}
+.combat-guidance{color:#e2c8b8;font-size:10px;line-height:1.6;white-space:pre-wrap;min-height:52px;padding:6px 0}
+.combat-alert{color:#ff8f76;border-left:2px solid #b44137;padding-left:7px;font-size:10px;min-height:17px}
+.combat-panel .action{color:#ffbd83}
+/* Numpad flight-assist grid, static style, no per-frame layout work. */
+.mnv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-bottom:7px}
+.mnv-grid button{min-height:44px;white-space:normal;text-align:left;font-size:10px;line-height:1.35;padding:6px 5px}
+.mnv-grid button strong{font-size:12px;color:var(--cyan);margin-right:4px}
+.mnv-grid button[aria-pressed="true"]{background:#19421c;border-color:var(--green);color:var(--green)}
+.mnv-status{padding:6px 8px;border:1px solid var(--line);color:var(--cyan);font-size:10px;min-height:32px;line-height:1.5}
+.touch-controls{display:none;position:absolute;left:8px;right:8px;bottom:8px;justify-content:space-between;gap:6px;pointer-events:none}
+.touch-group{display:flex;gap:4px;pointer-events:auto}
+.touch-group button{width:42px;height:44px;font:600 12px Consolas,monospace;border:1px solid #56845d;border-radius:4px;background:#06160edf;color:var(--green);touch-action:none}
+.touch-group button:active{background:#24552e}
+@media(max-width:1080px){
+  html,body{height:auto;min-height:100%;overflow:auto}
+  header{flex-wrap:wrap;padding:9px;gap:7px}
+  header .schema{white-space:normal}
+  main{display:flex;flex-direction:column;height:auto;min-height:calc(100vh - 62px)}
+  #center{order:0;min-height:530px;height:64vh;min-width:0}
+  #left{order:1;width:100%;min-width:0;border-right:0;border-top:1px solid var(--line)}
+  #right{order:2;width:100%;min-width:0;border-left:0;border-top:1px solid var(--line)}
+  #sceneWrap{height:55%;min-height:240px}
+  #dashwrap{min-height:100px}
+  .touch-controls{display:flex}
+}
+@media(max-width:540px){
+  #center{height:590px;min-height:590px}
+  #sceneWrap{height:325px;min-height:325px}
+  #dashwrap{min-height:140px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .charts{grid-template-columns:1fr}
+  .dialog{padding:10px}
+  .touch-group button{width:37px;height:42px}
+}
 </style>
 </head>
 <body>
 <header>
-  <h1>KNOX FALCON / F-16</h1>
-  <span class="schema">FLIGHT ENGINE 0.5.6 · TELEMETRY SCHEMA v1 · KnoxFalcon 0.2 / MCK-Aviation sim</span>
+  <h1>FLIGHT ENGINE / FİLO</h1>
+  <span class="schema">FLIGHT ENGINE 1.1.0 · TELEMETRY SCHEMA v3 · KnoxFalcon 0.2 / MCK-Aviation sim</span>
   <span class="spacer"></span>
   <button class="btn" id="btnRecord">● KAYIT (T)</button>
   <button class="btn" id="btnExpJSON">JSON</button>
   <button class="btn" id="btnExpCSV">CSV</button>
   <button class="btn primary" id="btnAnalysis" title="Grafikler + uçuş özeti (Z)">ANALİZ ▸</button>
   <button class="btn" id="btnService">SERVİS</button>
+  <button class="btn" id="btnPause" aria-pressed="false">DURAKLAT (P)</button>
   <button class="btn" id="btnReset">RST</button>
 </header>
 <main>
@@ -112,13 +173,14 @@ table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
         <span class="k">AB %</span><span></span><span id="qAb" style="color:var(--amber)">000</span>
         <span class="k">FUEL L</span><span></span><span id="qFuel" style="color:var(--green)">300.0</span>
         <span class="k">FLOW</span><span></span><span id="qFlow" style="color:var(--green)">0</span>
+        <span class="k">FUEL STATE</span><span></span><span id="qFuelState" style="color:var(--green)">NORMAL</span>
         <span class="k">CANOPY</span><span></span><span id="qCan" style="color:var(--green)">CLOSED</span>
         <span class="k">ARM</span><span></span><span id="qArm" style="color:var(--amber)">SAFE</span>
       </div>
     </div>
     <div class="sect">
       <div class="cap">İTKİ GAZI <b id="thrVal">%00</b></div>
-      <input type="range" id="thr" min="0" max="100" value="35" step="1">
+      <input type="range" id="thr" min="0" max="100" value="0" step="1">
       <div class="row" style="margin-top:4px">
         <button class="btn" id="btnIdle">%0</button>
         <button class="btn" id="btnCruise">%70</button>
@@ -150,6 +212,40 @@ table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
         <span class="k">FLARE</span><span></span><span id="qFlare">32 / 32</span>
       </div>
     </div>
+    <div class="sect" id="fleetPanel">
+      <div class="cap">UÇAK FİLOSU <b>POLYGON / DOKUSUZ</b></div>
+      <label class="opt" for="fleetSelect">UÇAK SEÇ
+        <select id="fleetSelect" aria-label="Uçak modeli seç">
+          <option value="F16">F-16C Fighting Falcon</option>
+          <option value="B737">Boeing 737-800 · Yolcu</option>
+          <option value="AH1">AH-1F Cobra · Helikopter</option>
+          <option value="AH64">AH-64 Apache · Helikopter</option>
+          <option value="AH6">AH-6 Little Bird · Helikopter</option>
+          <option value="SR71">SR-71 Blackbird · Keşif</option>
+        </select>
+      </label>
+      <div id="aircraftMode">SABİT KANAT · HAFİF AVCI</div><div id="fleetInfo" class="note" aria-live="polite">F-16C · jet · 14,8 m</div>
+      <div class="row" style="margin-top:7px"><button class="btn primary" id="btnCourse">HALKA / DİREK PARKURU (O)</button></div>
+      <div class="row"><button class="btn" id="btnCourseRestart">YENİ PARKUR</button><button class="btn danger" id="btnCourseStop">PARKURU BİTİR</button></div>
+      <div class="mission-panel" style="margin:6px 0"><div class="mission-status" id="courseStatus" role="status" aria-live="polite">PARKUR BEKLEMEDE</div>
+        <div class="mission-detail" id="courseGuidance">Mavi halkaların içinden uç. Sarı direklerde belirtilen sol/sağ yönü izle.</div></div>
+      <div class="note">O = parkur · halqa geçişi ve direk yanından geçme, konum/hız ve kanat/rotor açıklığına göre puanlanır.
+        Helikopterde gaz sürgüsü kolektif görevi görür (%55 civarı hover); W/S ileri/geri tilt, A/D yana eğilme, Q/E yön değiştirme.
+        Model çizimleri ve uçuş davranışları temsili simülasyondur; sertifikalı uçuş modeli değildir.</div>
+    </div>
+    <div class="sect" id="combatPanel">
+      <div class="cap">GÖREV OPERASYONLARI <b>POLYGON COMBAT</b></div>
+      <div class="combat-panel">
+        <div class="row"><button class="btn primary" id="btnGroundMission">YER GÖREVİ / KALKIŞ</button><button class="btn danger" id="btnDogfight">DOGFIGHT / HAVADA</button></div>
+        <div class="combat-status" id="combatStatus" role="status" aria-live="polite">GÖREV SEÇİLMEDİ</div>
+        <div class="combat-guidance" id="combatGuidance">Kurgusal askerî üsten kalk, kırmızı polygon hedefleri vur, piste dön. Ya da hava-hava dogfight başlat.</div>
+        <div class="row"><button class="btn" id="btnCycleTarget">HEDEF (X)</button><button class="btn" id="btnLockTarget" aria-pressed="false">KİLİT (J)</button></div>
+        <div class="row"><button class="btn warn" id="btnAGM">AGM / YER (V)</button><button class="btn warn" id="btnAAM">AAM / HAVA (M)</button></div>
+        <canvas id="combatMap" width="252" height="142" role="img" aria-label="Kurgusal yerel koordinat haritası" style="width:100%;height:142px;border:1px solid #4b3235;background:#081017;display:block;margin:6px 0"></canvas>
+        <div class="combat-alert" id="combatAlert">MASTER ARM: G · FLARE: F · görevler tamamen kurgusaldır.</div>
+      </div>
+      <div class="note">Oyun sistemi: nişan yönü, hedefte bekleme ve sembolik füze uçuşu; gerçek hedefleme/angajman algoritması değildir. Düşmanlar kırmızı, dokusuz polygon.</div>
+    </div>
     <div class="sect">
       <fieldset><legend>SANDBOX OPSİYONLARI</legend>
         <label class="opt"><input type="checkbox" id="optFree" checked> Free flight<small>serbest manvra</small></label>
@@ -171,6 +267,24 @@ table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
       </fieldset>
     </div>
     <div class="sect">
+      <div class="cap">UÇUŞ MANEVRALARI <b>NUMPAD 1–9</b></div>
+      <div class="mnv-grid" id="maneuverGrid" aria-label="Dokuz uçuş manevrası"></div>
+      <div class="mnv-status" id="maneuverStatus" role="status" aria-live="polite">HAZIR · Önce havalan; manevra için numpad 1–9</div>
+      <div class="note">Manevralar fizik motoruna kontrol girdisi verir, uçağı ışınlamaz. W/S/A/D/Q/E ile müdahale veya Esc ile iptal. Hız, irtifa, stall ve G sınırları kontrol edilir.</div>
+    </div>
+    <div class="sect">
+      <div class="cap">HAVADA YAKIT İKMALİ <b>KC-135</b></div>
+      <div class="mission-panel">
+        <div class="mission-status" id="missionStatus" role="status">TANKER BEKLEMEDE</div>
+        <div class="mission-detail" id="missionDetail">Havalandıktan sonra tanker çağır veya eğitim senaryosunu başlat.</div>
+        <div class="mission-guidance" id="missionGuidance">Tanker arkasında uygun hız ve konuma geç. Bağlantı iste.</div>
+        <div class="row"><button class="btn primary" id="btnTanker" title="Uçuş sırasında tanker yönlendir (K)">TANKER ÇAĞIR (K)</button><button class="btn warn" id="btnEmergency" title="Havada düşük yakıtla eğitim görevini başlat (U)">YAKIT ACİLİ (U)</button></div>
+        <div class="row"><button class="btn" id="btnContact" title="Uygun konumda boom bağlantısı talep et (L)" aria-pressed="false">BAĞLANTI İSTE (L)</button><button class="btn danger" id="btnAbortMission">GÖREVİ BİTİR</button></div>
+        <div class="fuel-alert" id="fuelAdvisory" aria-live="off">YAKIT TAKİBİ AÇIK</div>
+      </div>
+      <div class="note">Dokusuz polygon KC-135, hareketli tanker, göreli hız ve konum takibi. Bu bir eğitim oyunu; gerçek havada yakıt ikmali prosedürü veya F-16 yakıt sistemi değildir.</div>
+    </div>
+    <div class="sect">
       <div class="cap">KLAVYE</div>
       <div class="kval">
         <span class="k">W / S</span><span></span><span class="kkey">burnu aşağı / yukarı</span>
@@ -181,16 +295,32 @@ table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
         <span class="k">Space</span><span></span><span class="kkey">M61 toplu atış</span>
         <span class="k">R · F · B</span><span></span><span class="kkey">roket · flare · fren</span>
         <span class="k">T · Z</span><span></span><span class="kkey">kayıt · analiz</span>
+        <span class="k">NUM 1–9</span><span></span><span class="kkey">yönlendirmeli manevralar</span>
+        <span class="k">K · U · L</span><span></span><span class="kkey">tanker · acil görev · bağlan</span>
+        <span class="k">X · J</span><span></span><span class="kkey">hedef seç · kilit aç/kapat</span>
+        <span class="k">V · M</span><span></span><span class="kkey">AGM yer · AAM hava füzesi</span>
+        <span class="k">O</span><span></span><span class="kkey">halka/direk parkurunu başlat</span>
+        <span class="k">Esc</span><span></span><span class="kkey">manevrayı iptal et</span>
       </div>
-      <div class="note">Kalkış: gaz %100 → 55 m/s → S (burun yukarı). İniş: gaz azalt, hafif burun.</div>
+      <div class="note">Kalkış: gaz %100 → yaklaşık 65 m/s → S (burun yukarı). İniş: gaz azalt, hafif burun.</div>
     </div>
   </section>
 
   <section id="center">
-    <div id="centerTop">MCK-AVİATİON / KNOX FALCON F-16 · Görsel uçuş sahnesi + kokpit · <span id="fps">—</span></div>
+    <div id="centerTop">MCK-AVİATİON / FLIGHT ENGINE · FİLO / POLYGON</div>
+    <div id="performanceWrap"><span id="fps" aria-live="off">—</span><div id="fpsIndicator" aria-label="Kare hızı göstergesi"><div id="fpsFill"></div></div>
+      <label for="perfMode">FPS HEDEFİ</label><select id="perfMode" aria-label="Kare hızı hedefi">
+        <option value="60">60 · DENGELİ</option><option value="0">EKRAN HIZI</option><option value="30">30 · TASARRUF</option>
+      </select></div>
     <div id="sceneWrap">
       <canvas id="scene"></canvas>
-      <button class="btn" id="btnView" title="Kuyruk / Kokpit görüşü">GÖRÜŞ: KUYRUK</button>
+      <div class="scene-tools"><button class="btn" id="btnView" title="Kuyruk / kokpit / model inceleme görüşü">GÖRÜŞ: KUYRUK</button><button class="btn" id="btnWire" title="Polygon kenarlarını göster">KENAR: KAPALI</button></div>
+      <div id="modelInfo" aria-live="off">F-16C · polygon model · 14,8 × 9,8 × 4,8 m</div>
+      <div class="touch-controls" aria-label="Dokunmatik uçuş kontrolleri">
+        <div class="touch-group"><button id="touchPitchUp" data-flight-key="pitchUp" aria-label="Burun aşağı">W ↓</button><button id="touchPitchDown" data-flight-key="pitchDown" aria-label="Burun yukarı">S ↑</button></div>
+        <div class="touch-group"><button id="touchRollL" data-flight-key="rollL" aria-label="Sola yatış">A ←</button><button id="touchRollR" data-flight-key="rollR" aria-label="Sağa yatış">D →</button></div>
+        <div class="touch-group"><button id="touchYawL" data-flight-key="yawL" aria-label="Sola yönel">Q ↶</button><button id="touchYawR" data-flight-key="yawR" aria-label="Sağa yönel">E ↷</button></div>
+      </div>
     </div>
     <div id="dashwrap"><canvas id="dash" width="2158" height="729"></canvas></div>
     <div id="hudbar"></div>
@@ -200,7 +330,7 @@ table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
 
   <section id="right">
     <div class="sect">
-      <div class="cap">FLIGHT ENGINE · TELEMETRİ <b>v1</b></div>
+      <div class="cap">FLIGHT ENGINE · TELEMETRİ <b>v3</b></div>
       <table id="tele"></table>
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn" id="btnRec2" style="flex:1">● Kayıt başlat</button>
@@ -219,6 +349,25 @@ table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
         <span class="k">RNG</span><span></span><span id="qRng" style="color:var(--green)">—</span>
         <span class="k">NAV</span><span></span><span id="qNav" style="color:var(--green)">GROUND ESTIMATE</span>
       </div>
+    </div>
+    <div class="sect">
+      <div class="cap">TANKER / FORMASYON <b id="refuelBadge">IDLE</b></div>
+      <div class="kval">
+        <span class="k">TANKER RANGE</span><span></span><span id="qTankerRange">—</span>
+        <span class="k">YÖN / KAPANMA</span><span></span><span id="qTankerBearing">—</span>
+        <span class="k">CONTACT RNG</span><span></span><span id="qDockDist">—</span>
+        <span class="k">REL SPEED</span><span></span><span id="qDockSpeed">—</span>
+        <span class="k">YATAY / DIKEY</span><span></span><span id="qDockError">—</span>
+        <span class="k">TRANSFER</span><span></span><span id="qTransfer">0 L</span>
+      </div>
+    </div>
+    <div class="sect">
+      <div class="cap">COMBAT MISSION / HEDEF</div>
+      <div class="kval"><span class="k">GÖREV</span><span></span><span id="qCombatMission">—</span>
+      <span class="k">MESAFE</span><span></span><span id="qCombatRange">—</span>
+      <span class="k">YÖN</span><span></span><span id="qCombatBearing">—</span>
+      <span class="k">AGM / AAM</span><span></span><span id="qCombatMissiles">6 / 4</span>
+      <span class="k">UÇAK SAĞLIĞI</span><span></span><span id="qCombatHealth">100%</span></div>
     </div>
     <div class="sect">
       <div class="cap">AIRFRAME DURUMU</div>
@@ -258,50 +407,40 @@ table.parts td.cond.w{color:var(--amber)}table.parts td.cond.c{color:var(--red)}
   </div>
 </div></div>
 
+<script src="flight-math.js"></script>
+<script src="aircraft-mesh.js"></script>
+<script src="maneuvers.js"></script>
+<script src="air-refueling.js"></script>
+<script src="tanker-mesh.js"></script>
+<script src="combat-missions.js"></script>
+<script src="combat-visuals.js"></script>
+<script src="fleet-mesh.js"></script>
+<script src="flight-models.js"></script>
+<script src="obstacle-course.js"></script>
 <script>
 "use strict";
 /* ============================================================
    KNOX FALCON F-16 — tarayıcı uçuş motoru
-   MCK-Aviation / KnoxFalcon modundaki gerçek değerlerden derlendi:
+   MCK-Aviation / KnoxFalcon referanslarından uyarlanmış deneysel değerler:
    · F16SubsonicAero CL/CD tabloları (CLmax 1.34 @15°), kanat 27.87 m²
-   · İtki: 76 000 N military / 120 000 N afterburner, yükseklik kaybı
+   · İtki: 76 000 N kuru / 120 000 N yaş üst sınır (kalibrasyonsuz)
    · US Standard Atmosphere (288.15 K, lapse 0.0065, strato >11 km)
    · FlightSpeedEnvelope → a=340.3 m/s referans, mach07 threshold
-   · FixedStepRunner: 1/30 s adım   · Telemetry v1: 24 alan
+   · FixedStepRunner: 1/30 s adım   · Telemetry v2: yakıt/tanker alanları
    · Yakıt 300 L JP-8 · M61 600 rnd @110/s · Roket 12 · Flare 32
    · Roket ≥12 m / flare ≥3 m alt inhisası · HARD LANDING >12 m/s
    · G limit 9 / -3 · Tavan 12 000 m (default ceiling)
    ============================================================ */
-const G=9.80665, STEP=1/30, RHO0=1.225, DEG=180/Math.PI, RAD=Math.PI/180;
+const {G,STEP,RHO0,DEG,RAD,MIL_THRUST,AB_THRUST,clamp,smooth,clOf,cdOf,atm,engineThrust,csvCell}=FlightMath;
 const WING=27.87, G_MAX=9, G_MIN=-3;
-const MIL_THRUST=76000, AB_THRUST=120000;
 const FUEL_MAX=300, GUN_MAX=600, ROCKET_MAX=12, FLARE_MAX=32;
 const ROCKET_MIN_ALT=12, FLARE_MIN_ALT=3, HARD_LANDING_VS=12, TAKEOFF_SPEED=55;
+let currentType="F16", activeProfile=FlightFleet.profiles.F16, activeDynamics=FlightModels.profiles.F16;
+let fuelCapacity=300;
+let course=null;
+let previousVisual=null,visualPose=null;
+const MAX_RECORD_SAMPLES=12000; // stop, never silently discard recorded data
 
-/* --- F16SubsonicAero katsayı tabloları --- */
-const AOA_BK=[-30,-25,-20,-15,-10,-5,0,5,10,15,20,25,30,45,60,90];
-const CL_TAB=[-1.09,-0.71,-0.30,0.11,0.48,0.86,1.06,1.24,1.34,1.34,1.18,0.90,0.62,0.27,0.09,0.02];
-const CD_AOA=[-40,-15,0,10,20,30,45,60,90];
-const CD_TAB=[0.24,0.045,0.020,0.040,0.086,0.170,0.310,0.640,1.100];
-function interp(x,bk,tab){
-  if(x<=bk[0])return tab[0];
-  for(let i=1;i<bk.length;i++) if(x<=bk[i]){
-    const t=(x-bk[i-1])/(bk[i]-bk[i-1]);return tab[i-1]+t*(tab[i]-tab[i-1]);}
-  return tab[tab.length-1];
-}
-const clOf=a=>interp(a,AOA_BK,CL_TAB);
-const cdOf=a=>interp(a,CD_AOA,CD_TAB);
-
-/* --- US Standard Atmosphere --- */
-function atm(h){
-  h=Math.max(-500,Math.min(20000,h));
-  let T,p;
-  if(h<=11000){T=288.15-0.0065*h;p=101325*Math.pow(T/288.15,5.25588);}
-  else{T=216.65;p=101325*Math.pow(216.65/288.15,5.25588)*Math.exp(-G*(h-11000)/(287.05287*216.65));}
-  return {T,rho:p/(287.05287*T),pressure:p,soundSpeed:Math.sqrt(1.4*287.05287*Math.max(T,1))};
-}
-const clamp=(v,a,b)=>v<a?a:v>b?b:v;
-const smooth=(c,t,r,dt)=>{const d=t-c,m=r*dt;return c+clamp(d,-m,m);};
 const pad3=v=>String(Math.max(0,Math.round(v))).padStart(3,"0");
 const pad5=v=>String(Math.max(0,Math.round(v))).padStart(5,"0");
 
@@ -330,12 +469,13 @@ const S={
   options:{free:true,arcade:true,auto:true,fuelUse:true,stall:true},
   parts:{}, track:[], stats:{}, flowDisplay:0,
   telemCache:null, record:{on:false,every:0.5,t:0,samples:[],startedAt:0},
-  lastStallEvent:-99, gunHeat:0,
+  lastStallEvent:-99, gunHeat:0, gunShotRemainder:0, rocketImpactAt:null,
+  mission:null,refuelGuidance:null,refuelAddedL:0,fuelWarnLevel:"NORMAL",fuelAlert:FlightRefueling.warning(FUEL_MAX,FUEL_MAX,0),
 };
 PARTS.forEach(p=>S.parts[p[0]]=100);
 function resetStats(){
   S.stats={maxG:1,maxMach:0,maxAlt:0,minAlt:1e9,stalls:0,hardLandings:0,fuelUsed:0,
-    maxIAS:0,maxVs:0,minVs:0,gunFired:0,rocketsAway:0,flaresAway:0,maxThrottle:0,flights:0};
+    maxIAS:0,maxVs:0,minVs:0,gunFired:0,rocketsAway:0,flaresAway:0,maxThrottle:0,flights:0,refuelReceived:0,refuelContacts:0};
 }
 resetStats();
 
@@ -358,35 +498,308 @@ const ALERTS={
   "CANOPY OPEN":"CANOPY","HARD LANDING":"HARD LANDING","OVERSPEED":"OVERSPEED"};
 function setStatus(txt,color){S.status=txt;S.statusColor=color||"amber";}
 
-const massBase=8573; // kg (FlightDynamicsV2 18.5k/93k/107k N kütle bantları)
-const mass=()=>massBase+S.fuel*0.8;
+const mass=()=>activeProfile.mass+S.fuel*0.8; // visual fleet profiles are approximate, not certified flight models
+const missionLabel=()=>S.mission?.active?S.mission.status:"IDLE";
+let combat=null,combatGroundMeshes=null,combatRubbleMeshes=null;
+let combatMapLast=-1e9;
+function startGroundMission(){
+  if(currentType!=='F16'){log('SORTIE','Yer görevi yalnız F-16 modunda kullanılabilir','am');return false;}
+  resetSim();
+  combat=FlightCombat.createGround();combatGroundMeshes=FlightCombatVisuals.makeGround(combat.targets);
+  combatRubbleMeshes=Object.fromEntries(combat.targets.map(t=>[t.id,FlightCombatVisuals.rubble(t)]));combatMapLast=-1e9;
+  log("SORTIE","KURGUSAL YER GÖREVİ: ÜSTEN KALKIŞ → HEDEFLER → ÜSSE DÖNÜŞ","am");
+  updateCombatUI();return true;
+}
+function startDogfightMission(){
+  if(currentType!=='F16'){log('SORTIE','Dogfight yalnız F-16 modunda kullanılabilir','am');return false;}
+  resetSim();
+  Object.assign(S,{onGround:false,z:1710,vx:0,vy:155,vz:0,pitch:0.035,bank:0,heading:0,
+    engine:"RUNNING",spool:1,thrSpool:.35,abSpool:0,armed:false});
+  sliderVal=35;$("thr").value=35;
+  combat=FlightCombat.createDogfight();combatGroundMeshes=null;combatRubbleMeshes=null;combatMapLast=-1e9;
+  log("SORTIE","DOGFIGHT: havada başlangıç · düşman görüş hattında · G ile ARM","am");
+  updateCombatUI();return true;
+}
+function cycleCombatTarget(){
+  if(!combat)return;
+  FlightCombat.cycleTarget(combat);updateCombatUI();
+}
+function toggleCombatLock(){
+  if(!combat)return;
+  combat.lockRequested=!combat.lockRequested;
+  combat.locked=false;combat.lockSeconds=0;combat.lockId=null;
+  log("RADAR",combat.lockRequested?"Hedef doğrultusunda 0.8 sn bekle":"Kilit iptal edildi","am");
+  updateCombatUI();
+}
+function fireCombatMissile(type){
+  if(!combat){setWeapon("GÖREV SEÇ");return false;}
+  const result=FlightCombat.fire(combat,S,type);
+  setWeapon(result.reason);
+  log("MISSILE",result.reason,result.ok?"gn":"am");
+  updateCombatUI();return result.ok;
+}
+function updateCombatUI(){
+  const m=combat,guide=m?FlightCombat.guidance(m,S):null;
+  $("combatStatus").textContent=m?(m.type==="ground"?"YER HAREKÂTI":"DOGFIGHT")+" · "+m.phase+" · "+m.score+" PUAN":"GÖREV SEÇİLMEDİ";
+  $("combatGuidance").textContent=!m?"YER GÖREVİ: pistten kalk, kırmızı hedeflere AGM ile saldır, üsse dön. DOGFIGHT: havadan başla, AAM kilitle, F ile flare.":
+    "HEDEF "+(guide?.target||"—")+" · "+(guide?.range??0)+" m · "+Math.round(guide?.bearing??0)+"°\n"+
+    (m.phase==="RTB"?"KOORD X 0 · Y 0 (ÜS)\n":(FlightCombat.selected(m)?"KOORD X "+Math.round(FlightCombat.selected(m).x)+" · Y "+Math.round(FlightCombat.selected(m).y)+"\n":""))+
+    "KİLİT "+(m.locked?"LOCKED":m.lockRequested?"TAKİP "+Math.round((guide?.lockProgress||0)*100)+"%":"J İLE TALEP")+
+    " · AGM "+m.agm+" · AAM "+m.aam+" · FLARE "+S.flares+"\n"+
+    (m.type==="ground"?"HEDEF "+m.targets.filter(t=>t.required&&t.health>0).length+" / 3 KALDI · "+(m.phase==="RTB"?"PİSTE GERİ DÖN":"V İLE FÜZE"):
+    "UÇAK %"+m.health+" · DÜŞMAN %"+(m.enemy?Math.round(m.enemy.health/m.enemy.maxHealth*100):0)+" · "+(m.threats.length?"FÜZE TEHDİDİ!":"F İLE FLARE"));
+  $("combatAlert").textContent=m?.lastEvent||"MASTER ARM: G · FLARE: F";
+  $("btnLockTarget").setAttribute("aria-pressed",String(!!m?.lockRequested));
+  $("btnLockTarget").classList.toggle("active",!!m?.lockRequested);
+  $("qCombatMission").textContent=m?.phase||"—";
+  $("qCombatRange").textContent=guide?guide.range+" m":"—";
+  $("qCombatBearing").textContent=guide?Math.round(guide.bearing)+"°":"—";
+  $("qCombatMissiles").textContent=m?m.agm+" / "+m.aam:"6 / 4";
+  $("qCombatHealth").textContent=m?m.health+"%":"—";
+  drawCombatMap();
+}
+function drawCombatMap(){
+  const cv=$("combatMap");if(!cv)return;
+  if(combat&&S.simTime-combatMapLast<.14)return;
+  combatMapLast=S.simTime;
+  const ctx=cv.getContext("2d"),W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle="#08131b";ctx.fillRect(0,0,W,H);
+  const ground=!combat||combat.type==="ground";
+  const cx=ground?350:S.x,cy=ground?2200:S.y;
+  const size=ground?5200:4600;
+  const P=(x,y)=>[W/2+(x-cx)/size*H,H/2-(y-cy)/size*H];
+  ctx.strokeStyle="#24414a";ctx.lineWidth=.7;
+  for(let i=-4;i<=4;i++){
+    const gx=P(cx+i*500,cy),gy=P(cx,cy+i*500);
+    ctx.beginPath();ctx.moveTo(gx[0],0);ctx.lineTo(gx[0],H);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,gy[1]);ctx.lineTo(W,gy[1]);ctx.stroke();
+  }
+  const home=P(0,0);ctx.fillStyle="#7fd8ff";
+  ctx.fillRect(home[0]-3,home[1]-3,6,6);
+  ctx.font="9px Consolas,monospace";ctx.fillText("ÜS",home[0]+5,home[1]-3);
+  if(combat){
+    for(const t of (combat.type==="ground"?combat.targets:[combat.enemy])){
+      if(!t)continue;
+      const q=P(t.x,t.y);ctx.fillStyle=t.health>0?"#ed6366":"#664b4b";
+      ctx.fillRect(q[0]-3,q[1]-3,6,6);
+      if(combat.selectedId===t.id){ctx.strokeStyle="#ffe2a0";ctx.strokeRect(q[0]-6,q[1]-6,12,12);}
+      ctx.fillText(t.id,q[0]+7,q[1]+2);
+    }
+  }
+  const a=P(S.x,S.y),f=10;
+  ctx.strokeStyle="#9eff3d";ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(a[0],a[1]);
+  ctx.lineTo(a[0]+Math.sin(S.heading)*f,a[1]-Math.cos(S.heading)*f);ctx.stroke();
+  ctx.fillStyle="#9eff3d";ctx.beginPath();ctx.arc(a[0],a[1],3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#7fa9b0";ctx.font="9px Consolas,monospace";
+  ctx.fillText(ground?"YEREL KOORD · m":"RADAR · TAKTİK HARİTA",6,12);
+  ctx.fillText("▲ KUZEY",W-66,12);
+}
+function abortTanker(){
+  if(!S.mission)return;
+  S.mission=null;S.refuelGuidance=null;S.refuelAddedL=0;
+  log("TANKER","Görev iptal edildi / tanker ayrıldı","am");
+  updateMissionUI();
+}
+function spawnTanker(){
+  if(S.onGround){log("TANKER","Önce havalan veya U ile eğitim görevini aç","am");return false;}
+  S.mission=FlightRefueling.makeMission(S);
+  S.refuelGuidance=FlightRefueling.guidance(S.mission,S);
+  log("TANKER","KC-135 yakıt ikmal bölgesine geliyor — yönlendirmeyi izle","gn");
+  updateMissionUI();return true;
+}
+function startFuelEmergency(){
+  // Explicit air-start training preset; player still has to close and hold formation.
+  resetSim();
+  Object.assign(S,{onGround:false,x:0,y:0,z:2182,vx:0,vy:110,vz:0,
+    pitch:.065,bank:0,heading:0,engine:"RUNNING",spool:1,thrSpool:.11,
+    fuel:42,armed:false,ab:false,abSpool:0});
+  S.options.fuelUse=true;$('optFuelUse').checked=true;
+  sliderVal=11;$('thr').value=11;
+  S.mission=FlightRefueling.makeMission(S,{practice:true});
+  S.refuelGuidance=FlightRefueling.guidance(S.mission,S);
+  S.fuelWarnLevel="NORMAL";
+  S.fuelAlert=FlightRefueling.warning(S.fuel,fuelCapacity,.1);
+  log("MISSION","YAKIT İHMALİ: havada 42 L kaldı. KC-135'i yakala, L ile bağlantı iste!","rd");
+  updateMissionUI();return true;
+}
+function requestContact(){
+  if(!S.mission?.active||S.mission.status==="COMPLETE"){
+    log("TANKER","Aktif tanker yok — önce K veya U", "am");return false;
+  }
+  S.mission.request=!S.mission.request;
+  log("BOOM",S.mission.request?"Bağlantı talep edildi; stabil formasyonu koru":"Bağlantı talebi geri alındı","am");
+  updateMissionUI();return S.mission.request;
+}
+function updateMissionUI(){
+  const m=S.mission,g=S.refuelGuidance,active=!!m?.active;
+  const label=active?m.status:m?.status==="COLLISION"?"COLLISION":"TANKER BEKLEMEDE";
+  $("missionStatus").textContent=label;
+  $("refuelBadge").textContent=missionLabel();
+  $("btnContact").setAttribute("aria-pressed",String(!!m?.request));
+  $("btnContact").classList.toggle("active",!!m?.request);
+  $("btnContact").textContent=m?.request?"BAĞLANTI İSTENDİ (L)":"BAĞLANTI İSTE (L)";
+  if(active&&g){
+    $("qTankerRange").textContent=Math.round(g.distanceToTanker)+" m";
+    $("qTankerBearing").textContent=g.bearingDeg.toFixed(0)+"° / "+g.closureMps.toFixed(1)+"m/s";
+    $("qDockDist").textContent=g.distance.toFixed(1)+" m";
+    $("qDockSpeed").textContent=g.relativeSpeed.toFixed(1)+" m/s";
+    $("qDockError").textContent=g.lateralError.toFixed(1)+" / "+g.verticalError.toFixed(1)+" m";
+    $("missionDetail").textContent="MESAFE "+g.distanceToTanker.toFixed(0)+" m · KONTAK "+g.distance.toFixed(0)+" m · YÖN "+g.bearingDeg.toFixed(0)+"°\n"+
+      "İLERİ/GERİ "+g.alongError.toFixed(1)+" m · SAĞ/SOL "+g.lateralError.toFixed(1)+" m\n"+
+      "YÜKSEK/ALÇAK "+g.verticalError.toFixed(1)+" m · ΔV "+g.relativeSpeed.toFixed(1)+" m/s";
+    const lateral=Math.abs(g.lateralError)<4?"LATERAL OK":g.lateralError>0?"SOLA KAY":"SAĞA KAY";
+    const vertical=Math.abs(g.verticalError)<3?"LEVEL OK":g.verticalError>0?"ALÇAL":"YÜKSEL";
+    const ahead=Math.abs(g.alongError)<5?"POSITION OK":g.alongError<0?"YAKLAŞ":"GERİ ÇEKİL";
+    $("missionGuidance").textContent=m.connected?"BOOM BAĞLI · FORMASYONU KORU":
+      m.status==="COMPLETE"?"YAKIT İKMALİ TAMAMLANDI · TANKERDEN AYRIL":
+      !m.request?"TANKERİ YAKALA · YAKLAŞINCA GAZI ~%7'YE İNDİR · L BAĞLANTI":
+      ahead+" · "+lateral+" · "+vertical+(g.relativeSpeed>4?" · HIZ EŞİTLE":"");
+  }else{
+    $("missionDetail").textContent="Havalandıktan sonra K ile tanker çağır veya U ile düşük yakıt eğitim görevini başlat.";
+    $("missionGuidance").textContent="Tankerin yaklaşık 45 m gerisinde, 8 m altında hızını eşitle.";
+    for(const id of ["qTankerRange","qTankerBearing","qDockDist","qDockSpeed","qDockError"])$(id).textContent="—";
+  }
+  $("qTransfer").textContent=(m?.transferredL??0).toFixed(1)+" L";
+  const alert=S.fuelAlert;
+  const el=$("fuelAdvisory");
+  el.className="fuel-alert"+(alert.severity==="CRITICAL"||alert.severity==="EMPTY"?" danger":alert.severity==="LOW"||alert.severity==="BINGO"?" warning":"");
+  el.textContent="YAKIT "+alert.severity+" · "+alert.pct.toFixed(0)+"% · TAHMİNİ SÜRE "+
+    (Number.isFinite(alert.seconds)?Math.round(alert.seconds)+" sn":"—")+
+    (S.options.fuelUse?"":" · TÜKETİM KAPALI");
+}
+
 
 /* ================= UÇUŞ ADIMI ================= */
+function chooseAircraft(id){
+  if(!FlightFleet.profiles[id])return false;
+  currentType=id;activeProfile=FlightFleet.profiles[id];activeDynamics=FlightModels.profiles[id];
+  fuelCapacity=activeProfile.fuelCapacity||300;
+  AIRCRAFT=id==='F16'?FlightAircraft:FlightFleet.meshes[id];
+  setupAircraftRenderCache();
+  orbitDist=Math.max(17,activeProfile.dimensions.length*1.8);
+  resetSim();
+  document.getElementById('fleetSelect').value=id;
+  const shape=activeProfile.kind==='rotor'?'HELİKOPTER':'SABİT KANAT';
+  document.getElementById('aircraftMode').textContent=shape+' · '+(id==='SR71'?'MACH 3+ GÖZLEM':id==='B737'?'YOLCU TRANSPORT':id==='F16'?'HAFİF AVCI':'ROTOR / HOVER');
+  document.getElementById('fleetInfo').textContent=activeProfile.name+' · '+shape+' · '+activeProfile.dimensions.length.toFixed(1)+' m'+
+    ' · EYLEMSİZLİK '+(activeDynamics.rotorResponse||activeDynamics.rollRate).toFixed(2);
+
+  updViewLabel();
+  log('FILO',activeProfile.name+' seçildi · uçuş koşulları eğitim amaçlı yaklaşık','gn');
+  return true;
+}
+function updateCourseUI(){
+  const status=document.getElementById('courseStatus'),guide=document.getElementById('courseGuidance');
+  if(!status||!guide)return;
+  if(!course){status.textContent='PARKUR BEKLEMEDE';guide.textContent='Halkalardan geç, direklerin solundan/sağından veya arasından uç.';return;}
+  status.textContent=(course.finished?'BİTTİ':course.active?'AKTİF':'DURDU')+' · '+course.passed+'/'+course.objects.length+' GEÇİŞ · '+course.score+' PUAN';
+  const gate=course.objects[course.index];
+  if(!gate){guide.textContent='PARKUR TAMAMLANDI · kaçan '+course.missed+' · temas '+course.collisions;return;}
+  const text=gate.type==='ring'?'HALKANIN İÇİNDEN':gate.type==='gate'?'İKİ DİREK ARASINDAN':gate.side<0?'DİREĞİN SOLUNDAN':'DİREĞİN SAĞINDAN';
+  guide.textContent='#'+gate.id+' '+text+' · '+Math.max(0,Math.round(gate.y-S.y))+' m · X '+Math.round(gate.x-S.x)+' m · Z '+Math.round(gate.z-S.z)+' m';
+}
+function startObstacleCourse(){
+  // The optional course is self-contained and does not interfere with existing sorties.
+  resetSim();
+  const rotor=activeProfile.kind==='rotor';course=FlightCourse.create(rotor);
+  const g=course.objects[0],vel=rotor?30:currentType==='B737'?90:currentType==='SR71'?155:95;
+  Object.assign(S,{x:g.x,y:0,z:g.z,vx:0,vy:vel,vz:0,
+    onGround:false,heading:0,pitch:0,bank:0,engine:'RUNNING',spool:1,
+    thrSpool:rotor?activeDynamics.hoverCollective:.55,rotorRPM:rotor?1:0,abSpool:0,canopy:0});
+  sliderVal=rotor?Math.round(activeDynamics.hoverCollective*100):65;document.getElementById('thr').value=sliderVal;
+  log('PARKUR','9 etap · mavi halka · sarı yön direği · '+activeProfile.name,'gn');
+  updateCourseUI();return true;
+}
+function stopObstacleCourse(){course=null;updateCourseUI();}
 const key={pitchUp:false,pitchDown:false,rollL:false,rollR:false,yawL:false,yawR:false,cannon:false};
-let sliderVal=35;
+let sliderVal=0;
+let activeManeuver=null;
+let lastManeuverMessage="HAZIR · Havada NUM 1–9 veya tuş paneli";
+function renderManeuverButtons(){
+  document.querySelectorAll("#maneuverGrid button").forEach(b=>{
+    b.setAttribute("aria-pressed",String(!!activeManeuver&&activeManeuver.id===Number(b.dataset.maneuver)));
+  });
+}
+function setManeuverMessage(msg){lastManeuverMessage=msg;document.getElementById("maneuverStatus").textContent=msg;}
+function endManeuver(reason,warning=false){
+  if(!activeManeuver)return;
+  const title=activeManeuver.name;
+  activeManeuver=null;
+  setManeuverMessage(title+" · "+reason);
+  log("MANEVRA",title+" → "+reason,warning?"am":"gn");
+  renderManeuverButtons();
+}
+function startManeuver(id){
+  const def=FlightManeuvers.definition(id);
+  if(!def)return false;
+  if(activeProfile.kind==='rotor'){setManeuverMessage('HELIKOPTER: Numpad jet dönüş yardımcısı yerine cyclic/collective kullan');return false;}
+  if(!S.running){setManeuverMessage("ÖNCE DEVAM ET (P) · Simülasyon duraklatılmış");return false;}
+  const gate=FlightManeuvers.assess(id,S);
+  if(!gate.ok){setManeuverMessage("NUM"+id+" RED · "+gate.reason);log("MANEVRA",gate.reason,"am");return false;}
+  if(activeManeuver)endManeuver("yeni komut seçildi",true);
+  activeManeuver={id,name:def.name,elapsed:0,started:S.simTime};
+  setManeuverMessage("NUM"+id+" · "+def.name+" · Başladı");
+  log("MANEVRA","NUM"+id+" · "+def.name+" başladı","gn");
+  renderManeuverButtons();
+  return true;
+}
+function getManeuverControls(dt){
+  if(!activeManeuver)return null;
+  const a=activeManeuver,d=FlightManeuvers.definition(a.id);
+  if(key.pitchDown||key.pitchUp||key.rollR||key.rollL||key.yawR||key.yawL){endManeuver("pilot kontrolü aldı",true);return null;}
+  const speed=Math.hypot(S.vx,S.vy,S.vz);
+  if(S.onGround){endManeuver("zemin teması",true);return null;}
+  if(a.id!==9&&(S.stall||speed<d.minSpeed*.75||S.z<Math.max(45,d.minAlt*.4)||S.loadFactorG>8.5)){
+    endManeuver("uçuş sınırı / enerji nedeniyle iptal",true);return null;
+  }
+  if(S.gains.pitch<.05||S.gains.roll<.05){endManeuver("kontrol kazancı çok düşük",true);return null;}
+  a.elapsed+=dt;
+  const desired=FlightManeuvers.profile(a.id,a.elapsed);
+  if(desired.finished){endManeuver("tamamlandı");return null;}
+  return FlightManeuvers.guidance(desired,S);
+}
+// Create the same nine commands for pointer/touch and physical NumPad buttons.
+const maneuverGrid=document.getElementById("maneuverGrid");
+for(const id of [7,8,9,4,5,6,1,2,3]){
+  const d=FlightManeuvers.definition(id),b=document.createElement("button");
+  b.type="button";b.className="btn";b.dataset.maneuver=String(id);
+  b.innerHTML="<strong>"+id+"</strong>"+d.name;
+  b.title=d.detail+" · min "+d.minSpeed+"m/s, "+d.minAlt+"m";
+  b.setAttribute("aria-label","Numpad "+id+" "+d.name);
+  b.setAttribute("aria-pressed","false");
+  b.addEventListener("click",()=>startManeuver(id));maneuverGrid.appendChild(b);
+}
 
 function step(dt){
+  // Snapshot for interpolation: only rendering samples this; the physics remains deterministic.
+  previousVisual={x:S.x,y:S.y,z:S.z,pitch:S.pitch,bank:S.bank,heading:S.heading};
+  const coursePrevious={x:S.x,y:S.y,z:S.z};
   S.simTime+=dt;
   const wasGround=S.onGround;
   S.justTook=Math.max(0,(S.justTook||0)-dt);
   const opt=S.options,g=S.gains;
 
   /* --- kontroller (W=burnu aşağı, S=burnu yukarı) --- */
-  const pIn=(key.pitchDown?1:0)-(key.pitchUp?1:0);
-  const rIn=(key.rollR?1:0)-(key.rollL?1:0);
-  const yIn=(key.yawR?1:0)-(key.yawL?1:0);
+  const directed=getManeuverControls(dt);
+  const pIn=directed?directed.pitch:(key.pitchDown?1:0)-(key.pitchUp?1:0);
+  const rIn=directed?directed.roll:(key.rollR?1:0)-(key.rollL?1:0);
+  const yIn=directed?directed.yaw:(key.yawR?1:0)-(key.yawL?1:0);
   S.pitchIn=smooth(S.pitchIn,pIn*g.pitch,5,dt);
   S.rollIn =smooth(S.rollIn ,rIn*g.roll ,4,dt);
   S.yawIn  =smooth(S.yawIn  ,yIn*(S.onGround?g.yaw:g.airYaw*g.yaw),4,dt);
   const thr=clamp(sliderVal,0,100)/100;
 
   /* --- motor spool --- */
-  if(S.engine==="STARTING"){S.spool=smooth(S.spool,0.08,0.05,dt);
-    if(S.spool>0.075){S.engine="RUNNING";log("ENGINE","Spool complete — RUNNING","gn");}}
-  else if(S.engine==="STOPPING"){S.spool=smooth(S.spool,0,0.07,dt);
-    if(S.spool<=0.003){S.engine="OFF";log("ENGINE","OFF","am");}}
-  S.thrSpool=smooth(S.thrSpool,S.engine==="RUNNING"?thr:0,S.engine==="RUNNING"?0.5:0.15,dt);
-  const abReq=S.engine==="RUNNING"&&(S.ab||S.abHeld)&&thr>0.5;
+  if(S.engine==="STARTING"){S.spool=smooth(S.spool,1,0.6,dt);
+    if(S.spool>=0.99){S.spool=1;S.engine="RUNNING";log("ENGINE","Spool complete — RUNNING","gn");}}
+  else if(S.engine==="STOPPING"){S.spool=smooth(S.spool,0,0.7,dt);
+    if(S.spool<=0.01){S.spool=0;S.engine="OFF";log("ENGINE","OFF","am");}}
+  const throttleSlew=activeProfile.kind==='rotor'?.85:currentType==='B737'?.20:currentType==='SR71'?.28:.5;
+  S.thrSpool=smooth(S.thrSpool,S.engine==="RUNNING"?thr:0,S.engine==="RUNNING"?throttleSlew:0.15,dt);
+  S.rotorRPM=activeProfile.kind==='rotor'?FlightModels.rpmNext(S.rotorRPM,S.engine,dt,activeDynamics):0;
+  const abReq=activeDynamics.afterburner===true&&S.engine==="RUNNING"&&(S.ab||S.abHeld)&&thr>0.5;
   S.abSpool=smooth(S.abSpool,abReq?1:0,abReq?0.55:1.1,dt);
 
   /* --- atmosfer --- */
@@ -394,20 +807,27 @@ function step(dt){
   const speed=Math.hypot(S.vx,S.vy,S.vz);
   S.mach=speed/at.soundSpeed;
   S.qPa=0.5*at.rho*speed*speed;
-  const rhoF=at.rho/RHO0;
 
   /* --- yakıt (legacy formula: (0.015+0.1thr+0.025*spd/55) L/s taban) --- */
   let flow=0;
   if(S.engine==="RUNNING"&&opt.fuelUse){
-    flow=(0.015+0.1*S.thrSpool+0.025*speed/55)*(1+1.6*S.abSpool);
+    flow=(0.015+0.1*S.thrSpool+0.025*speed/55)*(1+1.6*S.abSpool)*activeDynamics.fuelFactor;
     if(S.thrSpool<0.02&&speed<1)flow=0.011;
   }
-  S.flowDisplay=flow*(1+1.0*S.abSpool)*3600*1.764; // lb/h display
+  S.flowDisplay=flow*3600*1.764; // lb/h display
   if(flow>0){
     const used=Math.min(S.fuel,flow*dt);S.fuel-=used;S.stats.fuelUsed+=used;
     if(S.fuel<=0.01){S.fuel=0;
       if(S.engine==="RUNNING"||S.engine==="STARTING"){S.engine="STOPPING";log("FUEL","JP-8 EMPTY — engine shutdown","rd");}}
   }
+
+  // Fuel alarms are edge-triggered; recovery after a successful transfer re-arms alarms.
+  S.fuelAlert=FlightRefueling.warning(S.fuel,fuelCapacity,flow);
+  const warningRank={NORMAL:0,LOW:1,BINGO:2,CRITICAL:3,EMPTY:4};
+  if(warningRank[S.fuelAlert.severity]>warningRank[S.fuelWarnLevel]){
+    log("FUEL",S.fuelAlert.severity+" — kalan "+S.fuel.toFixed(1)+" L",S.fuelAlert.severity==="LOW"?"am":"rd");
+  }
+  S.fuelWarnLevel=S.fuelAlert.severity;
 
   /* --- canopy --- */
   if(Math.abs(S.canopyTarget-S.canopy)>0.001){
@@ -423,18 +843,30 @@ function step(dt){
 
   /* --- aero katsayıları --- */
   const aDeg=clamp(S.aoa,-40,90);
-  let cl=clOf(aDeg),cd=cdOf(aDeg);
-  if(S.mach>0.82)cd*=1+Math.pow(S.mach-0.82,2)*26; // transonic rise (mach07 env)
-  const lift=S.qPa*WING*cl, drag=S.qPa*WING*cd;
+  let cl=clOf(aDeg),cd=cdOf(aDeg),lift,drag;
+  if(currentType==='F16'){
+    if(S.mach>0.82)cd*=1+Math.pow(S.mach-0.82,2)*26;
+    lift=S.qPa*activeProfile.wing*cl;drag=S.qPa*activeProfile.wing*cd;
+  }else{
+    const aero=FlightModels.aeroForces(activeDynamics,aDeg,S.qPa,activeProfile.wing,S.mach,S.onGround);
+    cl=aero.cl||0;cd=aero.cd||0;lift=aero.lift;drag=aero.drag;
+  }
 
   /* --- açısal hız entegrasyonu (DIRECT_RATE) --- */
-  const pitchRate=S.onGround?S.pitchIn*0.22:S.pitchIn*0.55;
-  const rollRate=S.rollIn*2.2;
-  const yawRate=S.yawIn*0.5;
+  const pitchRate=S.pitchIn*(S.onGround?.22:activeDynamics.pitchRate);
+  const rollRate=S.rollIn*activeDynamics.rollRate;
+  const yawRate=S.yawIn*activeDynamics.yawRate;
   S.pitchRate=pitchRate*DEG;S.rollRate=rollRate*DEG;S.yawRate=yawRate*DEG;
-  S.pitch=clamp(S.pitch+pitchRate*dt,-1.35,1.5);
-  S.bank=clamp(S.bank+rollRate*dt,-1.45,1.45);
-  if(!S.onGround)S.heading+=(G*Math.tan(S.bank)/Math.max(speed,30))*dt+yawRate*dt;
+  // Arcade assistance limits AoA while airborne. Free flight allows a wider attitude envelope.
+  let nextPitch=S.pitch+pitchRate*dt;
+  if(opt.arcade&&!S.onGround&&speed>30){
+    nextPitch=clamp(nextPitch,pathAngle-(activeManeuver&&activeManeuver.id===4?20:10)*RAD,pathAngle+15*RAD);
+  }
+  const pitchLimit=activeDynamics.maxPitch;
+  S.pitch=clamp(nextPitch,activeProfile.kind==='rotor'?-pitchLimit:(opt.free?-1.35:-.75),pitchLimit);
+  const bankLimit=activeProfile.kind==='rotor'?activeDynamics.maxBank:opt.free?activeDynamics.maxBank:Math.min(.9,activeDynamics.maxBank);
+  S.bank=clamp(S.bank+rollRate*dt,-bankLimit,bankLimit);
+  if(!S.onGround)S.heading+=(activeProfile.kind==='rotor'?0:G*Math.tan(S.bank)/Math.max(speed,30))*dt+yawRate*dt;
   else S.heading+=S.yawIn*0.55*clamp(speed/12,0,1)*dt;
 
   /* --- birim vektörler --- */
@@ -442,32 +874,29 @@ function step(dt){
   const nx=cp*Math.sin(S.heading),ny=cp*Math.cos(S.heading),nz=sp;
 
   /* --- ITKI --- */
-  let T=0;
-  if(S.engine==="RUNNING"){
-    T=(MIL_THRUST*S.thrSpool+AB_THRUST*S.abSpool*0.85)*(0.35+0.65*rhoF);
-    if(S.z>S.ceiling)T*=Math.max(0.05,1-(S.z-S.ceiling)/1500);
-  }
+  const T=activeProfile.kind==='rotor'?0:engineThrust(S.engine,S.thrSpool,S.abSpool,S.z,S.ceiling)*activeDynamics.thrust;
 
   const m=mass();
   let ax=0,ay=0,az=0;
   if(S.onGround){
     /* zemin fiziği: sürtünme + fren + itki, teker yönlendirme */
     const dec=(S.brake?0.38:0.012+((S.engine==="OFF"||S.engine==="STOPPING")?0.02:0))*m*G;
-    const red=dec*dt/m;
+    // Rolling/braking friction and aerodynamic drag oppose ground velocity.
+    const red=(dec+drag)*dt/m;
     if(speed>0.01){
       const k=Math.max(0,speed-red)/Math.max(speed,0.001);
       S.vx*=k;S.vy*=k;
       /* hız yönünü burun yönüne çek (tekerlek tutuşu) */
       const perp=S.vx*ny-S.vy*nx;
       const grip=clamp(dt*4,0,0.35);
-      S.vx-=ny*perp*grip;S.vy-=nx*perp*grip;
+      S.vx-=ny*perp*grip;S.vy+=nx*perp*grip;
     }else{S.vx=0;S.vy=0;}
     /* itki doğrudan hız olarak: v += (T/m) dt (yatay bileşen) */
     S.vx+=nx*T/m*dt;S.vy+=ny*T/m*dt;
     S.bank=smooth(S.bank,0,4,dt);
     S.pitch=smooth(S.pitch,S.brake?-0.006:clamp(S.pitch,-0.01,0.3),2.5,dt);
-    if(speed>TAKEOFF_SPEED&&S.pitch>0.09){
-      S.onGround=false;S.stats.flights++;S.justTook=0.8;
+    if((activeProfile.kind==='rotor'&&FlightModels.isReadyForRotorLift(activeDynamics,S.engine,S.rotorRPM,S.thrSpool))||(activeProfile.kind!=='rotor'&&speed>activeProfile.takeoff&&S.pitch>0.09&&lift>=m*G)){
+      S.onGround=false;S.stats.flights++;S.justTook=0.8;if(activeProfile.kind==='rotor')S.vz=1;
       log("LIFT","TAKEOFF — havada ("+S.z.toFixed(1)+" m)","gn");
     }
   }else{
@@ -484,6 +913,13 @@ function step(dt){
     ax=(T*nx)/m-(drag*vux)/m+(lift*ldx)/m;
     ay=(T*ny)/m-(drag*vuy)/m+(lift*ldy)/m;
     az=(T*nz)/m-(drag*vuz)/m+(lift*ldz)/m-G;
+    if(activeProfile.kind==='rotor'){
+      // Simplified helicopter collective/tilt model. No autorotation or blade-element dynamics.
+      const rotor=FlightModels.rotorAcceleration(activeDynamics,{engine:S.engine,rotorRPM:S.rotorRPM,
+        collective:S.thrSpool,pitch:S.pitch,bank:S.bank,heading:S.heading,vx:S.vx,vy:S.vy,vz:S.vz});
+      ax=rotor.ax;ay=rotor.ay;az=rotor.az;
+      S.loadFactorG=clamp(rotor.loadFactorG,0,3);
+    }
     /* tavan üstü: nazik aşağı it */
     if(S.z>S.ceiling+200)az=Math.min(az,-(S.z-S.ceiling)*0.01);
     /* G limit aksiyonu: aşırı G kanat hasarı */
@@ -495,27 +931,28 @@ function step(dt){
   S.x+=S.vx*dt;S.y+=S.vy*dt;S.z+=S.vz*dt;
 
   /* G yüklemesi */
-  if(!S.onGround){
+  if(!S.onGround&&activeProfile.kind!=='rotor'){
     const turnN=Math.abs(1/Math.max(0.35,Math.cos(S.bank)));
     const aeroN=clamp(lift/(m*G),G_MIN*0.3,20);
     S.loadFactorG=clamp(Math.max(aeroN*Math.max(0.0,Math.cos(S.bank)*0.3+0.7),Math.min(turnN,aeroN>0.9?turnN:1)),G_MIN,G_MAX*1.25);
-  }else S.loadFactorG=1;
+  }else if(S.onGround)S.loadFactorG=1;
   if(S.loadFactorG>G_MAX+0.5){
     S.parts.WingLeft=clamp(S.parts.WingLeft-0.35,0,100);
     S.parts.WingRight=clamp(S.parts.WingRight-0.35,0,100);
   }
 
   /* stall */
-  if(!S.onGround&&opt.stall){
-    if(aDeg>15.5&&S.qPa>150){
+  if(!S.onGround&&activeProfile.kind!=='rotor'&&opt.stall){
+    if(aDeg>activeDynamics.stallAoA&&S.qPa>150){
       if(!S.stall&&S.simTime-S.lastStallEvent>2.5){S.stall=true;S.stats.stalls++;
         log("STALL","STALL — burun aşağı / güç ekle","rd");}
       S.lastStallEvent=S.simTime;
-    }else if(aDeg<12)S.stall=false;
+    }else if(aDeg<activeDynamics.stallAoA-3.5)S.stall=false;
   }else S.stall=false;
 
   /* zemin teması / iniş — az önce kalkış olduysa kontrol atlanır */
-  if(S.z<=1.8&&(!S.justTook||S.vz<-1)){
+  const landingElevation=currentType==='B737'?3.4:1.8;
+  if(S.z<=landingElevation&&(!S.justTook||S.vz<-1)){
     if(!S.onGround){
       S.onGround=true;
       const vs=Math.abs(S.vz);
@@ -530,15 +967,64 @@ function step(dt){
       }else log("LANDING","temas — V/S "+vs.toFixed(1)+" m/s","gn");
       S.pitch=clamp(S.pitch,-0.02,0.18);
     }
-    S.z=1.8;S.vz=0;
-  }else if(S.z>2.0)S.onGround=false;
+    S.z=landingElevation;S.vz=0;
+  }else if(S.z>landingElevation+.2)S.onGround=false;
+
+  /* Swept course checkpoints, independent from render frames and aircraft speed. */
+  if(course?.active){
+    const clearance=activeProfile.kind==='rotor'?activeProfile.dimensions.rotorDiameter/2:activeProfile.dimensions.wingspan/2;
+    for(const ev of FlightCourse.tick(course,coursePrevious,S,clearance,S.simTime)){
+      if(ev.done)log('PARKUR',ev.text+(course.missed?' · kaçan '+course.missed:''),ev.ok?'gn':'am');
+      else log('PARKUR','#'+ev.id+' '+ev.text+' · '+(ev.ok?'BAŞARILI':'KAÇTI')+(ev.collision?' · DİREĞE/HALKAYA TEMAS':''),ev.ok?'gn':'am');
+      if(ev.collision){S.parts.WingLeft=clamp(S.parts.WingLeft-8,0,100);S.parts.WingRight=clamp(S.parts.WingRight-8,0,100);}
+    }
+    if((S.simTime*3|0)!==((S.simTime-dt)*3|0))updateCourseUI();
+  }
+
+  /* Tanker moves in the same fixed simulation clock as the aircraft.
+     Contact depends on relative position/speed and continuous stable holding. */
+  S.refuelAddedL=0;
+  if(S.mission?.active){
+    const result=FlightRefueling.tick(S.mission,S,dt,fuelCapacity);
+    S.refuelGuidance=result.guidance;
+    S.refuelAddedL=result.addedL;
+    S.stats.refuelReceived+=result.addedL;
+    if(result.event==="BOOM CONNECTED")S.stats.refuelContacts++;
+    if(result.addedL>0){
+      S.fuelAlert=FlightRefueling.warning(S.fuel,fuelCapacity,flow);
+      S.fuelWarnLevel=S.fuelAlert.severity;
+    }
+    if(result.event){
+      log("TANKER",result.event,result.event.includes("COLLISION")?"rd":"gn");
+      if(result.event==="TANKER COLLISION"){
+        S.parts.WingLeft=clamp(S.parts.WingLeft-55,0,100);
+        S.parts.WingRight=clamp(S.parts.WingRight-55,0,100);
+        S.parts.Engine=clamp(S.parts.Engine-45,0,100);
+      }
+    }
+  }
+
+  /* Fictional combat mission state uses the same 30 Hz fixed simulation clock. */
+  if(combat){
+    const previousHealth=combat.health;
+    const events=FlightCombat.tick(combat,S,dt);
+    for(const e of events)log("COMBAT",e,e.includes("TEHDİT")||e.includes("İSABETİ")?"rd":"am");
+    if(combat.health<previousHealth){
+      S.parts.WingLeft=clamp(S.parts.WingLeft-(previousHealth-combat.health)*.35,0,100);
+      S.parts.FlightHydraulics=clamp(S.parts.FlightHydraulics-(previousHealth-combat.health)*.28,0,100);
+      if(combat.health===0){S.parts.Engine=0;S.engine="STOPPING";}
+    }
+  }
 
   /* silah zamanları */
+  if(S.rocketImpactAt!==null&&S.simTime>=S.rocketImpactAt){
+    S.rocketImpactAt=null;
+    if(S.weaponStatus==="ROCKET AWAY")setWeapon("ROCKET IMPACT");
+  }
   S.rktCd=Math.max(0,S.rktCd-dt);S.flrCd=Math.max(0,S.flrCd-dt);
   S.overheat=Math.max(0,S.overheat-dt*0.35);
   if(S.weaponTimer>0){S.weaponTimer-=dt;if(S.weaponTimer<=0)S.weaponStatus=null;}
-  if(S.gunCd>0)S.gunCd-=dt;
-  if(key.cannon&&S.engine!=="OFF")fireCannon(true);
+  if(key.cannon&&S.engine!=="OFF")fireCannon(dt);
 
   /* CCIP (mod d.KF_impactTime/impactDistance benzeri) */
   const hSpeed=Math.hypot(S.vx,S.vy);
@@ -547,27 +1033,43 @@ function step(dt){
   S.impactRng=hSpeed*S.impactT;
 
   /* durum satırı */
+  const actualSpeed=Math.hypot(S.vx,S.vy,S.vz);
   if(S.onGround){
-    if(speed<0.4)setStatus("PARKED");
-    else if(S.pitch>0.05&&speed>TAKEOFF_SPEED-12)setStatus("TAKEOFF / ROTATE","gn");
+    if(actualSpeed<0.4)setStatus("PARKED");
+    else if(S.pitch>0.05&&actualSpeed>TAKEOFF_SPEED-12)setStatus("TAKEOFF / ROTATE","gn");
     else setStatus("TAXI / TAKEOFF ROLL");
   }else{
     setStatus(S.stall?"STALL - LOWER NOSE / ADD POWER":(S.mach>0.98?"OVERSPEED":"AIRBORNE"),S.stall||S.mach>0.98?"rd":"gn");
   }
   const isOpen=S.canopy>0.05;
-  S.warn=S.fuel<30?"FUEL LOW":(!S.onGround&&S.engine!=="RUNNING"?"ENG OFF AIRBORNE":isOpen?"CANOPY OPEN":S.stall?"STALL - LOWER NOSE / ADD POWER":null);
+  S.warn=S.fuelAlert.severity==="EMPTY"?"FUEL EMPTY":
+    S.fuelAlert.severity==="CRITICAL"?"FUEL CRITICAL":
+    S.fuelAlert.severity==="BINGO"?"FUEL BINGO":
+    (!S.onGround&&S.engine!=="RUNNING"?"ENG OFF AIRBORNE":
+    S.fuelAlert.severity==="LOW"?"FUEL LOW":isOpen?"CANOPY OPEN":S.stall?"STALL - LOWER NOSE / ADD POWER":null);
 
-  /* --- TELEMETRY v1 (KnoxFalcon_Telemetry.lua alan listesi) --- */
+  /* --- TELEMETRY v3; post-integration state at this timestamp --- */
+  const sampleAtmosphere=atm(S.z);
+  S.soundSpeed=sampleAtmosphere.soundSpeed;
+  S.mach=actualSpeed/S.soundSpeed;
+  S.qPa=0.5*sampleAtmosphere.rho*actualSpeed*actualSpeed;
   const hdg=((S.heading*DEG)%360+360)%360;
   S.telemCache={
-    simTimeSeconds:S.simTime,speedMps:speed,speedKmh:speed*3.6,mach:S.mach,
+    simTimeSeconds:S.simTime,speedMps:actualSpeed,speedKmh:actualSpeed*3.6,mach:S.mach,
     altitudeM:S.z,verticalSpeedMps:S.vz,nosePitchDeg:S.pitch*DEG,bankDeg:S.bank*DEG,
     headingDeg:hdg,rollRateDegS:S.rollRate,pitchRateDegS:S.pitchRate,yawRateDegS:S.yawRate,
     aoaDeg:S.aoa,sideslipDeg:S.sideslip,loadFactorG:S.loadFactorG,
     throttlePct:S.thrSpool*100,afterburnerPct:S.abSpool*100,
-    dynamicPressurePa:S.qPa,specificEnergyJkg:speed*speed/2+G*S.z,
+    dynamicPressurePa:S.qPa,specificEnergyJkg:actualSpeed*actualSpeed/2+G*S.z,
     positionXM:S.x,positionYM:S.y,positionZM:S.z,
-    velocityXMps:S.vx,velocityYMps:S.vy,velocityZMps:S.vz};
+    velocityXMps:S.vx,velocityYMps:S.vy,velocityZMps:S.vz,
+    fuelL:S.fuel,fuelFlowLps:flow,refuelAddedL:S.refuelAddedL,
+    tankerContactDistanceM:S.refuelGuidance?.distance??-1,
+    tankerRelativeSpeedMps:S.refuelGuidance?.relativeSpeed??-1,
+    combatScore:combat?.score??0,combatHealthPct:combat?.health??100,
+    combatRangeM:combat?FlightCombat.guidance(combat,S).range:-1,
+    combatAGM:combat?.agm??0,combatAAM:combat?.aam??0,aircraftIndex:['F16','B737','AH1','AH64','AH6','SR71'].indexOf(currentType),rotorRPM:S.rotorRPM,
+    courseCheckpoint:course?.index??0,courseScore:course?.score??0};
 
   const t=S.telemCache;
   S.stats.maxG=Math.max(S.stats.maxG,t.loadFactorG);
@@ -588,21 +1090,31 @@ function step(dt){
   if(S.record.on){
     S.record.t+=dt;
     if(S.record.t>=S.record.every){
-      S.record.t=0;
-      S.record.samples.push({t:S.simTime,status:S.status,...S.telemCache});
+      S.record.t-=S.record.every;
+      S.record.samples.push({t:S.simTime,status:S.status,maneuverId:activeManeuver?activeManeuver.id:0,
+        maneuverName:activeManeuver?activeManeuver.name:"",tankerState:missionLabel(),combatPhase:combat?.phase||"NONE",...S.telemCache});
+      if(S.record.samples.length>=MAX_RECORD_SAMPLES){
+        S.record.on=false;
+        updRecButtons();
+        log("TELEMETRY","Kayıt limiti ("+MAX_RECORD_SAMPLES+") doldu; kayıt güvenle durduruldu.","am");
+        $("recInfo").textContent="LİMİT · "+MAX_RECORD_SAMPLES+" örnek";
+      }
     }
   }
 }
 
 /* --- M61 topu: 6600 rds/min → 110/s --- */
-function fireCannon(continuous){
-  if(S.gunCd>0)return;
+function fireCannon(seconds){
   if(S.overheat>=5){setWeapon("CANNON OVERHEAT - COOL DOWN");return;}
   if(S.gunRounds<=0){setWeapon("CANNON EMPTY - LOAD 20 MM AMMO");return;}
   if(!S.armed){setWeapon("MASTER ARM SAFE");return;}
-  const shots=continuous?2:1;
+  S.gunShotRemainder+=110*seconds;
+  const due=Math.floor(S.gunShotRemainder);
+  const shots=Math.min(S.gunRounds,due);
+  S.gunShotRemainder-=due;
+  if(!shots)return;
   S.gunRounds-=shots;S.stats.gunFired+=shots;
-  S.gunCd=shots/110;S.overheat=Math.min(6,S.overheat+0.045);
+  S.overheat=Math.min(6,S.overheat+shots*0.0225);
   setWeapon(S.gunRounds<=0?"CANNON EMPTY - LOAD 20 MM AMMO":"M61 CANNON FIRING");
 }
 function setWeapon(msg){S.weaponStatus=msg;S.weaponTimer=2;}
@@ -613,44 +1125,65 @@ function fireRocket(){
   if(S.rktCd>0){setWeapon("ROCKET RELEASE COOLDOWN");return;}
   S.rockets--;S.rktCd=3;S.stats.rocketsAway++;
   setWeapon("ROCKET AWAY");log("ROCKET","bırakıldı · "+S.rockets+" kaldı","am");
-  setTimeout(()=>{if(S.weaponStatus==="ROCKET AWAY")setWeapon("ROCKET IMPACT");},1800);
+  S.rocketImpactAt=S.simTime+1.8; // simulation time, safely resettable
 }
 function fireFlare(){
   if(S.flares<=0){setWeapon("FLARE DISPENSER EMPTY");return;}
   if(S.z<FLARE_MIN_ALT){setWeapon("FLARES: MINIMUM ALTITUDE 3 M");return;}
   if(S.flrCd>0){setWeapon("FLARE DISPENSER COOLDOWN");return;}
   S.flares--;S.flrCd=1.2;S.stats.flaresAway++;
+  if(combat)FlightCombat.deployFlare(combat);
   setWeapon("FLARE BURST - VISUAL COUNTERMEASURE");
   log("FLARE","burst · "+S.flares+" kaldı","am");
 }
 function toggleEngine(){
+  if(S.engine==="OFF"&&S.fuel<=0&&S.options.fuelUse){log("ENGINE","Yakıt yok — motor başlatılamaz","rd");return;}
   if(S.engine==="OFF"){S.engine="STARTING";log("ENGINE","STARTING — spool","am");}
   else{S.engine="STOPPING";log("ENGINE","STOPPING","am");}
 }
 function toggleCanopy(){S.canopyTarget=S.canopyTarget>0.5?0:1;log("CANOPY",(S.canopyTarget>0.5?"açılıyor":"kapanıyor")+"…");}
 function toggleArm(){S.armed=!S.armed;log("MASTER ARM",S.armed?"ARM ON — silah aktif":"ARM SAFE — silah pasif",S.armed?"am":"gn");}
 function resetSim(){
-  Object.assign(S,{simTime:0,x:0,y:0,z:1.8,vx:0,vy:0,vz:0,
+  combat=null;combatGroundMeshes=null;combatRubbleMeshes=null;combatMapLast=-1e9;
+  course=null;updateCourseUI();
+  activeManeuver=null;
+  setManeuverMessage("HAZIR · Havada NUM 1–9 veya tuş paneli");renderManeuverButtons();
+  Object.assign(S,{simTime:0,x:0,y:0,z:currentType==='B737'?3.4:1.8,vx:0,vy:0,vz:0,
+    mission:null,refuelGuidance:null,refuelAddedL:0,fuelWarnLevel:"NORMAL",
+    fuelAlert:FlightRefueling.warning(fuelCapacity,fuelCapacity,0),
     pitch:0,bank:0,heading:0,aoa:0,sideslip:0,pitchIn:0,rollIn:0,yawIn:0,
     ab:false,brake:false,engine:S.options.auto?"RUNNING":"OFF",
-    spool:S.options.auto?0.08:0,thrSpool:S.options.auto?0.35:0,abSpool:0,
-    fuel:FUEL_MAX,gunRounds:GUN_MAX,rockets:ROCKET_MAX,flares:FLARE_MAX,
+    spool:S.options.auto?1:0,thrSpool:0,rotorRPM:0,abSpool:0,ceiling:activeDynamics.ceiling,
+    fuel:fuelCapacity,gunRounds:GUN_MAX,rockets:ROCKET_MAX,flares:FLARE_MAX,
     armed:false,canopy:0,canopyTarget:0,onGround:true,mach:0,stall:false,
     status:"PARKED",warn:null,weaponStatus:null,rktCd:0,flrCd:0,gunCd:0,overheat:0,track:[],loadFactorG:1});
-  sliderVal=35;document.getElementById("thr").value=35;
+  sliderVal=0;document.getElementById("thr").value=0;
   PARTS.forEach(p=>S.parts[p[0]]=100);
   resetStats();
   S.record.samples=[];S.record.t=0;S.record.startedAt=0;S.record.on=false;
+  S.abHeld=false;S.gunHeat=0;S.gunShotRemainder=0;S.rocketImpactAt=null;
+  S.lastStallEvent=-99;S.weaponTimer=0;S.flowDisplay=0;S.telemCache=null;previousVisual=null;visualPose=null;
+  Object.keys(key).forEach(name=>key[name]=false);
+  S.running=true;updPauseButton();updRecButtons();
   logList.innerHTML="";
-  log("SIM","reset — PARKED · motor "+(S.options.auto?"RUNNING (gaz %35)":"OFF"),"gn");
-  updButtons();
+  log("SIM","reset — PARKED · motor "+(S.options.auto?"RUNNING (gaz %0)":"OFF"),"gn");
+  updButtons();updateMissionUI();updateCombatUI();
 }
 
 /* ================= UI BAĞLAMA ================= */
 const $=id=>document.getElementById(id);
 window.addEventListener("keydown",e=>{
-  if(/^(INPUT|SELECT)$/.test(e.target.tagName))return;
+  if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)||e.target.isContentEditable)return;
+  const openModal=document.querySelector(".modal.open");
+  if(openModal){if(e.code==="Escape")openModal.classList.remove("open");return;}
+  if(/^Numpad[1-9]$/.test(e.code)){
+    e.preventDefault();
+    if(!e.repeat)startManeuver(Number(e.code.slice(-1)));
+    return;
+  }
+  if(e.repeat&&["KeyO","KeyI","KeyC","KeyG","KeyR","KeyF","KeyB","KeyT","KeyZ","KeyP","KeyK","KeyU","KeyL","KeyX","KeyJ","KeyV","KeyM"].includes(e.code))return;
   switch(e.code){
+    case"Escape":endManeuver("iptal edildi",true);break;
     case"KeyW":key.pitchUp=true;break;
     case"KeyS":key.pitchDown=true;break;
     case"KeyA":key.rollL=true;break;
@@ -667,8 +1200,23 @@ window.addEventListener("keydown",e=>{
     case"KeyB":S.brake=!S.brake;updButtons();break;
     case"KeyT":toggleRecord();break;
     case"KeyZ":openAnalysis();break;
+    case"KeyP":togglePause();break;
+    case"KeyO":startObstacleCourse();break;
+    case"KeyK":spawnTanker();break;
+    case"KeyU":startFuelEmergency();break;
+    case"KeyL":requestContact();break;
+    case"KeyX":cycleCombatTarget();break;
+    case"KeyJ":toggleCombatLock();break;
+    case"KeyV":fireCombatMissile("ground");break;
+    case"KeyM":fireCombatMissile("air");break;
   }
 });
+function clearHeldControls(){
+  Object.keys(key).forEach(name=>key[name]=false);
+  S.abHeld=false;S.ab=false;updButtons();
+}
+window.addEventListener("blur",()=>{clearHeldControls();endManeuver("odak kaybı",true);});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){clearHeldControls();endManeuver("sayfa gizlendi",true);}});
 window.addEventListener("keyup",e=>{switch(e.code){
   case"KeyW":key.pitchUp=false;break;case"KeyS":key.pitchDown=false;break;
   case"KeyA":key.rollL=false;break;case"KeyD":key.rollR=false;break;
@@ -683,28 +1231,57 @@ $("thr").addEventListener("input",e=>{sliderVal=+e.target.value;});
 $("btnEngine").onclick=toggleEngine;
 $("btnCanopy").onclick=toggleCanopy;
 $("btnArm").onclick=()=>{toggleArm();updButtons();};
-$("btnCannon").addEventListener("mousedown",()=>key.cannon=true);
-$("btnCannon").addEventListener("mouseup",()=>key.cannon=false);
-$("btnCannon").addEventListener("mouseleave",()=>key.cannon=false);
+function bindHeldPointer(id,start,end){
+  const btn=$(id);
+  btn.style.touchAction="none";
+  btn.addEventListener("pointerdown",e=>{
+    if(e.button!==0)return;
+    btn.setPointerCapture(e.pointerId);start();e.preventDefault();
+  });
+  const stop=()=>end();
+  btn.addEventListener("pointerup",stop);
+  btn.addEventListener("pointercancel",stop);
+  btn.addEventListener("lostpointercapture",stop);
+}
+bindHeldPointer("btnCannon",()=>key.cannon=true,()=>key.cannon=false);
 $("btnRocket").onclick=fireRocket;
 $("btnFlare").onclick=fireFlare;
 $("btnBrake").onclick=()=>{S.brake=!S.brake;updButtons();};
 $("btnPark").onclick=()=>{S.brake=true;sliderVal=0;$("thr").value=0;updButtons();};
-$("btnAfterburner").addEventListener("mousedown",()=>{S.ab=true;updButtons();});
-$("btnAfterburner").addEventListener("mouseup",()=>{S.ab=false;updButtons();});
-$("btnAfterburner").addEventListener("mouseleave",()=>{if(S.ab){S.ab=false;updButtons();}});
+bindHeldPointer("btnAfterburner",()=>{S.ab=true;updButtons();},()=>{S.ab=false;updButtons();});
+document.querySelectorAll("[data-flight-key]").forEach(btn=>{
+  const name=btn.dataset.flightKey;
+  bindHeldPointer(btn.id,()=>key[name]=true,()=>key[name]=false);
+});
 $("optFree").onchange=e=>S.options.free=e.target.checked;
 $("optArcade").onchange=e=>S.options.arcade=e.target.checked;
 $("optAuto").onchange=e=>{S.options.auto=e.target.checked;if(!e.target.checked&&S.engine==="RUNNING"){S.engine="STOPPING";}};
 $("optFuelUse").onchange=e=>S.options.fuelUse=e.target.checked;
 $("optStall").onchange=e=>S.options.stall=e.target.checked;
 $("optCeil").onchange=e=>S.ceiling=+e.target.value;
-$("gPitch").onchange=e=>S.gains.pitch=clamp(+e.target.value,0,1);
-$("gRoll").onchange=e=>S.gains.roll=clamp(+e.target.value,0,1);
-$("gYaw").onchange=e=>S.gains.yaw=clamp(+e.target.value,0,1);
-$("gAirYaw").onchange=e=>S.gains.airYaw=clamp(+e.target.value,0,1);
-$("sampleEvery").onchange=e=>S.record.every=clamp(+e.target.value,0.1,5);
+$("gPitch").onchange=e=>S.gains.pitch=clamp(Number.isFinite(e.target.valueAsNumber)?e.target.valueAsNumber:1,0,1);
+$("gRoll").onchange=e=>S.gains.roll=clamp(Number.isFinite(e.target.valueAsNumber)?e.target.valueAsNumber:0.35,0,1);
+$("gYaw").onchange=e=>S.gains.yaw=clamp(Number.isFinite(e.target.valueAsNumber)?e.target.valueAsNumber:1,0,1);
+$("gAirYaw").onchange=e=>S.gains.airYaw=clamp(Number.isFinite(e.target.valueAsNumber)?e.target.valueAsNumber:0.2,0,1);
+$("sampleEvery").onchange=e=>S.record.every=clamp(Number.isFinite(e.target.valueAsNumber)?e.target.valueAsNumber:0.5,0.1,5);
+function updPauseButton(){
+  $("btnPause").textContent=S.running?"DURAKLAT (P)":"DEVAM (P)";
+  $("btnPause").setAttribute("aria-pressed",String(!S.running));
+  $("btnPause").classList.toggle("active",!S.running);
+}
+function togglePause(){S.running=!S.running;if(!S.running)clearHeldControls();updPauseButton();}
+$("btnPause").onclick=togglePause;
 $("btnReset").onclick=resetSim;
+$("btnTanker").onclick=spawnTanker;
+$("btnEmergency").onclick=startFuelEmergency;
+$("btnContact").onclick=requestContact;
+$("btnAbortMission").onclick=abortTanker;
+$("btnGroundMission").onclick=startGroundMission;
+$("btnDogfight").onclick=startDogfightMission;
+$("btnCycleTarget").onclick=cycleCombatTarget;
+$("btnLockTarget").onclick=toggleCombatLock;
+$("btnAGM").onclick=()=>fireCombatMissile("ground");
+$("btnAAM").onclick=()=>fireCombatMissile("air");
 function updButtons(){
   $("btnBrake").classList.toggle("active",S.brake);
   $("btnArm").classList.toggle("active",S.armed);
@@ -717,7 +1294,9 @@ const TELE_FIELDS=[["simTimeSeconds","s"],["speedMps","m/s"],["speedKmh","km/h"]
 ["rollRateDegS","deg/s"],["pitchRateDegS","deg/s"],["yawRateDegS","deg/s"],["aoaDeg","AOA"],
 ["sideslipDeg","BETA"],["loadFactorG","G"],["throttlePct","THR%"],["afterburnerPct","AB%"],
 ["dynamicPressurePa","q Pa"],["specificEnergyJkg","Energy"],["positionXM","X m"],["positionYM","Y m"],
-["positionZM","Z m"],["velocityXMps","Vx"],["velocityYMps","Vy"],["velocityZMps","Vz"]];
+["positionZM","Z m"],["velocityXMps","Vx"],["velocityYMps","Vy"],["velocityZMps","Vz"],
+["fuelL","L"],["fuelFlowLps","L/s"],["refuelAddedL","L/step"],["tankerContactDistanceM","m"],["tankerRelativeSpeedMps","m/s"],
+["combatScore","pts"],["combatHealthPct","%"],["combatRangeM","m"],["combatAGM","n"],["combatAAM","n"]];
 $("tele").innerHTML=TELE_FIELDS.map(f=>'<tr><td class="k">'+f[0]+'</td><td>'+f[1]+'</td><td class="n">0</td></tr>').join("");
 const teleCells=[...document.querySelectorAll("table#tele td.n")];
 function updTele(){
@@ -811,7 +1390,7 @@ function drawDash(){
 
   /* data_entry (842,50,474,110) */
   ctx.fillStyle=DARK;ctx.fillRect(842,50,474,110);
-  fieldBox(860,58,436,26,"center",S.options.free?"FE 0.5.6 / FREE":"FE 0.5.6 / ASSIST");
+  fieldBox(860,58,436,26,"center",S.options.free?"FE 1.1.0 / FREE":"FE 1.1.0 / ASSIST");
   const hdg=Math.round(((t.headingDeg||0)%360+360)%360);
   fieldBox(860,92,62,27,"left","HDG",WHITE);
   fieldBox(926,92,76,27,"right",pad3(hdg));
@@ -885,7 +1464,7 @@ function drawDash(){
   const wells=[
     [724,466,148,134,"ENGINE",({RUNNING:"RUN",STARTING:"START",STOPPING:"STOP"})[S.engine]||"OFF","RPM %",S.spool],
     [918,466,142,136,null,null,"THR %",S.thrSpool],
-    [1100,466,142,136,null,null,"FUEL %",S.fuel/FUEL_MAX],
+    [1100,466,142,136,null,null,"FUEL %",S.fuel/fuelCapacity],
     [1288,466,148,136,null,null,"GUN",S.gunRounds/GUN_MAX]];
   wells.forEach(w=>{
     const[x,y,we,h,lab,val,lab2,val2]=w;
@@ -901,14 +1480,14 @@ function drawDash(){
   ctx.fillText("FUEL LBS",2048,228);
   fieldBox(2002,238,94,40,"center",pad4(S.fuel*1.764));
   ctx.fillStyle=DARK;ctx.fillRect(2004,296,92,170);
-  vbar(2014,300,72,162,S.fuel/FUEL_MAX);
+  vbar(2014,300,72,162,S.fuel/fuelCapacity);
   ctx.fillText("FLOW LB/H",2048,548);
   fieldBox(2002,556,94,42,"center",pad4(S.flowDisplay*(1+S.abSpool)));
   ctx.fillText("AB "+Math.round(S.abSpool*100)+"%",2048,640);
 
   /* alt bilgi */
   ctx.font="600 20px Consolas";ctx.fillStyle="#16321a";ctx.textAlign="left";
-  ctx.fillText("KNOX FALCON · MCK AVIATION mod sim — telemetry schema v1",24,700);
+  ctx.fillText("KNOX FALCON · MCK AVIATION mod sim — telemetry schema v2",24,700);
 }
 function pad4(v){return String(Math.max(0,Math.round(v))).padStart(4,"0");}
 
@@ -919,7 +1498,7 @@ function updHud(){
   $("hudbar").textContent=
 "IAS "+Math.abs(kmh/1.852).toFixed(0)+" KT / "+(kmh>=0?"+":"")+kmh.toFixed(0)+" km/h   ALT "+Math.round(t.altitudeM*3.28084)+" FT / "+t.altitudeM.toFixed(0)+" m\n"+
 "PITCH "+t.nosePitchDeg.toFixed(0)+"   BANK "+t.bankDeg.toFixed(0)+"   V/S "+t.verticalSpeedMps.toFixed(1)+" m/s   AOA "+t.aoaDeg.toFixed(1)+"   G "+t.loadFactorG.toFixed(2)+"\n"+
-"ENG "+S.engine+"   RPM "+pad3(S.spool*100)+"%   THR "+pad3(S.thrSpool*100)+"%   FUEL "+S.fuel.toFixed(1)+" / "+FUEL_MAX+" L   HDG "+pad3(t.headingDeg)+"   CANOPY "+(S.canopy>0.05?"OPEN / MOVING":"CLOSED")+"\n"+
+"ENG "+S.engine+"   RPM "+pad3(S.spool*100)+"%   THR "+pad3(S.thrSpool*100)+"%   FUEL "+S.fuel.toFixed(1)+" / "+fuelCapacity+" L ["+S.fuelAlert.severity+"]   HDG "+pad3(t.headingDeg)+"   CANOPY "+(S.canopy>0.05?"OPEN / MOVING":"CLOSED")+"\n"+
 "ARM "+(S.armed?"ON":"SAFE")+"   M61 "+S.gunRounds+"   DROPS "+S.rockets+"   FLARES "+S.flares+"   TTG "+(S.impactT>0.2?S.impactT.toFixed(1)+"S":"--")+"   RNG "+(S.impactT>0.2?Math.round(S.impactRng)+"M":"--");
 }
 function updQuick(){
@@ -929,15 +1508,26 @@ function updQuick(){
   $("qThr").textContent=pad3(S.thrSpool*100);
   $("qAb").textContent=pad3(S.abSpool*100);
   $("qFuel").textContent=S.fuel.toFixed(1);
+  $("qFuelState").textContent=S.fuelAlert.severity;
+  $("qFuelState").style.color=S.fuelAlert.severity==="CRITICAL"||S.fuelAlert.severity==="EMPTY"?"var(--red)":S.fuelAlert.severity==="NORMAL"?"var(--green)":"var(--amber)";
+  updateMissionUI();
   $("qFlow").textContent=Math.round(S.flowDisplay);
   const c=$("qCan");c.textContent=S.canopy>0.05?"OPEN":"CLOSED";c.style.color=S.canopy>0.05?"var(--amber)":"var(--green)";
   const a=$("qArm");a.textContent=S.armed?"ON":"SAFE";a.style.color=S.armed?"var(--green)":"var(--amber)";
   $("qGun").textContent=S.gunRounds+" / "+GUN_MAX;
   $("qRocket").textContent=S.rockets+" / "+ROCKET_MAX;
   $("qFlare").textContent=S.flares+" / "+FLARE_MAX;
-  $("statusbar").textContent="STATUS "+S.status+(S.warn?"   ⚠ "+S.warn:"")+"   MACH "+(S.mach||0).toFixed(3)+"   AOA "+((t.aoaDeg)||0).toFixed(1)+"°   G "+(t.loadFactorG||1).toFixed(2);
+  $("statusbar").textContent="STATUS "+S.status+(activeManeuver?"   NUM"+activeManeuver.id+" "+activeManeuver.name:"")+(S.warn?"   ⚠ "+S.warn:"")+"   MACH "+(S.mach||0).toFixed(3)+"   AOA "+((t.aoaDeg)||0).toFixed(1)+"°   G "+(t.loadFactorG||1).toFixed(2);
+  if(activeManeuver){
+    const def=FlightManeuvers.definition(activeManeuver.id);
+    const bucket=Math.floor(5*activeManeuver.elapsed/def.duration);
+    if(bucket!==activeManeuver.displayBucket){
+      activeManeuver.displayBucket=bucket;
+      $("maneuverStatus").textContent="NUM"+activeManeuver.id+" · "+activeManeuver.name+" · "+(bucket*20)+"% · "+Math.round(S.z)+"m · "+Math.round(Math.hypot(S.vx,S.vy,S.vz))+"m/s";
+    }
+  }
   const sb=$("statusbar");
-  sb.style.color=S.stall?"var(--red)":S.mach>0.98?"var(--red)":S.onGround?"var(--amber)":"var(--green)";
+  sb.style.color=S.fuelAlert.severity==="EMPTY"||S.fuelAlert.severity==="CRITICAL"?"var(--red)":S.stall?"var(--red)":S.mach>0.98?"var(--red)":S.onGround?"var(--amber)":"var(--green)";
   $("qTtg").textContent=S.impactT>0.2?S.impactT.toFixed(1)+" s":"—";
   $("qRng").textContent=S.impactT>0.2?Math.round(S.impactRng)+" m":"—";
   const inh=S.z<ROCKET_MIN_ALT||S.rockets<=0;
@@ -970,17 +1560,17 @@ $("btnService").onclick=openService;
 $("btnService2").onclick=openService;
 $("btnServiceClose").onclick=()=>$("mService").classList.remove("open");
 $("svcFix").onclick=()=>{const p=PARTS[selectedPart];S.parts[p[0]]=100;renderSvc();renderPartsQuick();$("svcMsg").textContent=p[1]+" serviced → %100.";};
-$("svcRefuel").onclick=()=>{S.fuel=Math.min(FUEL_MAX,S.fuel+50);$("svcMsg").textContent="JP-8 eklendi: "+S.fuel.toFixed(1)+" / "+FUEL_MAX+" L";};
+$("svcRefuel").onclick=()=>{S.fuel=Math.min(fuelCapacity,S.fuel+50);$("svcMsg").textContent="JP-8 eklendi: "+S.fuel.toFixed(1)+" / "+fuelCapacity+" L";};
 $("svcAmmo").onclick=()=>{S.gunRounds=GUN_MAX;$("svcMsg").textContent="20 mm yüklendi: "+GUN_MAX+" mermi";};
 $("svcRocket").onclick=()=>{S.rockets=ROCKET_MAX;$("svcMsg").textContent="Roket yüklendi: "+ROCKET_MAX;renderPartsQuick();};
 $("svcFlare").onclick=()=>{S.flares=FLARE_MAX;$("svcMsg").textContent="Flare yüklendi: "+FLARE_MAX;renderPartsQuick();};
 
 /* ================= KAYIT DIŞA / EXPORT ================= */
-const CSV_COLS=["t","status","simTimeSeconds","speedMps","speedKmh","mach","altitudeM","verticalSpeedMps",
-"nosePitchDeg","bankDeg","headingDeg","aoaDeg","loadFactorG","throttlePct","afterburnerPct","dynamicPressurePa"];
+const CSV_COLS=["t","status","maneuverId","maneuverName","simTimeSeconds","speedMps","speedKmh","mach","altitudeM","verticalSpeedMps",
+"nosePitchDeg","bankDeg","headingDeg","aoaDeg","loadFactorG","throttlePct","afterburnerPct","dynamicPressurePa","fuelL","fuelFlowLps","refuelAddedL","tankerContactDistanceM","tankerRelativeSpeedMps","tankerState","combatPhase","combatScore","combatHealthPct","combatRangeM","combatAGM","combatAAM"];
 function toggleRecord(){
   S.record.on=!S.record.on;
-  if(S.record.on){S.record.startedAt=S.simTime;S.record.samples.length=0;}
+  if(S.record.on){S.record.startedAt=S.simTime;S.record.t=0;S.record.samples.length=0;}
   log("TELEMETRY",S.record.on?"kayıt BAŞLADI ("+S.record.every+" s / örnek)":"kayıt DURDURULDU","gn");
   updRecButtons();
 }
@@ -991,7 +1581,10 @@ function updRecButtons(){
 }
 $("btnRecord").onclick=toggleRecord;
 $("btnRec2").onclick=toggleRecord;
-$("btnClear2").onclick=()=>{S.record.samples=[];$("recInfo").textContent="temizlendi";};
+$("btnClear2").onclick=()=>{
+  S.record.on=false;S.record.samples=[];S.record.t=0;
+  $("recInfo").textContent="temizlendi";updRecButtons();
+};
 function download(name,text,mime){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([text],{type:mime}));
@@ -1001,21 +1594,18 @@ function download(name,text,mime){
 function exportCSV(){
   const ss=S.record.samples;
   if(!ss.length){alert("Örnek yok — önce ● KAYIT başlat.");return;}
-  const csv=CSV_COLS.join(",")+"\n"+ss.map(s=>{
-    return CSV_COLS.map(c=>{
-      const v=s[c];
-      return typeof v==="number"?+v.toFixed(3):String(v).replace(/,/g,";");
-    }).join(",");
-  }).join("\n");
+  const csv=CSV_COLS.join(",")+"\r\n"+ss.map(s=>CSV_COLS.map(c=>csvCell(s[c])).join(",")).join("\r\n");
   download("knoxfalcon_telemetry_"+Date.now()+".csv",csv,"text/csv");
 }
 function exportJSON(){
   const ss=S.record.samples;
   if(!ss.length){alert("Örnek yok — önce ● KAYIT başlat.");return;}
-  const data={meta:{mod:"MCK-Aviation / KnoxFalcon 0.2",flightEngine:"0.5.6",telemetrySchema:1,
+  const data={meta:{mod:"MCK-Aviation / KnoxFalcon 0.2",flightEngine:"1.0.0",telemetrySchema:3,
     samplingEveryS:S.record.every,sampleCount:ss.length,
     firstT:ss[0].t,lastT:ss[ss.length-1].t},
     summary:S.stats,
+    missionSummary:combat?{type:combat.type,phase:combat.phase,score:combat.score,
+      targetsDestroyed:combat.destroyed,shots:combat.shots,hits:combat.hits,aircraftHealthPct:combat.health}:null,
     samples:ss};
   download("knoxfalcon_telemetry_"+Date.now()+".json",JSON.stringify(data,null,1),"application/json");
 }
@@ -1036,8 +1626,9 @@ function openAnalysis(){
     ["MAX HIZ",Math.round(st.maxIAS)+" km/h"],["MAX G",st.maxG.toFixed(2)],
     ["MAX ALT",Math.round(Math.max(0,st.maxAlt))+" m"],["STALL",String(st.stalls)],
     ["HARD LANDING",String(st.hardLandings)],["JP-8 HARCANAN",st.fuelUsed.toFixed(1)+" L"],
+    ["İKMAL ALINAN",st.refuelReceived.toFixed(1)+" L"],["BOOM KONTAK",String(st.refuelContacts)],
     ["M61",st.gunFired+" rnd"],["ROKET",String(st.rocketsAway)],["FLARE",String(st.flaresAway)],
-    ["MAX V/S ↑",st.maxVs.toFixed1?st.maxVs.toFixed(1):st.maxVs.toFixed(1)+" m/s"],
+    ["MAX V/S ↑",st.maxVs.toFixed(1)+" m/s"],
     ["MIN V/S ↓",st.minVs.toFixed(1)+" m/s"],["MAX THR",Math.round(st.maxThrottle)+"%"],["ÖRNEK SAYISI",String(ss.length)]
   ];
   $("anaStats").innerHTML=stHTML.map(s=>'<div class="stat"><div class="l">'+s[0]+'</div><div class="v">'+s[1]+"</div></div>").join("");
@@ -1057,8 +1648,9 @@ function openAnalysis(){
 }
 function drawChart(cvv,ss,field){
   const c=cvv.getContext("2d"),W=cvv.width,H=cvv.height,pad={l:52,r:8,t:8,b:14};
-  const vals=ss.map(s=>+(s[field]||0).toFixed(3));
-  let mn=Math.min(...vals),mx=Math.max(...vals);
+  const vals=ss.map(s=>Number.isFinite(s[field])?+s[field].toFixed(3):0);
+  let mn=Infinity,mx=-Infinity;
+  for(const v of vals){if(v<mn)mn=v;if(v>mx)mx=v;}
   if(mn===mx){mn-=1;mx+=1;}
   const pd=(mx-mn)*0.08;mn-=pd;mx+=pd;
   c.fillStyle="#060d07";c.fillRect(0,0,W,H);
@@ -1069,7 +1661,7 @@ function drawChart(cvv,ss,field){
     c.beginPath();c.moveTo(pad.l,y);c.lineTo(W-pad.r,y);c.stroke();
     c.fillStyle="#5c8f4a";c.fillText((mx-(mx-mn)*i/3).toFixed(Math.abs(mx-mn)<4?2:0),pad.l-4,y);
   }
-  const X=i=>pad.l+(W-pad.l-pad.r)*i/(vals.length-1);
+  const X=i=>pad.l+(W-pad.l-pad.r)*i/Math.max(1,vals.length-1);
   const Y=v=>pad.t+(H-pad.t-pad.b)*(1-(v-mn)/(mx-mn));
   if(field==="loadFactorG"){
     c.strokeStyle="#7a2020";c.setLineDash([3,3]);
@@ -1091,16 +1683,58 @@ document.querySelectorAll(".modal").forEach(mm=>mm.addEventListener("mousedown",
 
 /* ================= 3B SAHNE — kendi perspektif render'ımız =================
    Kokpit / kuyruk kamera: F-16 mesh + pist + binalar + tepeler + deniz.  */
-const sceneCv=$("scene"),sctx=sceneCv.getContext("2d");
-let sceneView="cockpit";
+document.getElementById('fleetSelect').addEventListener('change',e=>chooseAircraft(e.target.value));
+document.getElementById('btnCourse').onclick=startObstacleCourse;
+document.getElementById('btnCourseRestart').onclick=startObstacleCourse;
+document.getElementById('btnCourseStop').onclick=stopObstacleCourse;
+const sceneCv=$("scene"),sctx=sceneCv.getContext("2d",{alpha:false});
+let sceneView="chase",showWire=false;
+let sceneSize={w:0,h:0,dpr:0,resizes:0};
+let orbitAz=0.55,orbitEl=0.30,orbitDist=17,orbitPointer=null;
+const flightPerf={frames:0,renderMs:0,faces:0,drawnFaces:0,tankerFaces:0,resizeCount:0,renderAvgMs:0};
 function fitScene(){
   const r=sceneCv.getBoundingClientRect();
-  sceneCv.width=Math.max(360,r.width|0);sceneCv.height=Math.max(220,r.height|0);
+  const w=Math.max(1,Math.round(r.width)),h=Math.max(1,Math.round(r.height));
+  // Clamp high-DPI cost. Scaling is a rendering resolution choice, not 3D geometry.
+  const dpr=Math.min(window.devicePixelRatio||1,1.5);
+  if(w===sceneSize.w&&h===sceneSize.h&&dpr===sceneSize.dpr)return;
+  sceneSize={w,h,dpr,resizes:sceneSize.resizes+1};
+  sceneCv.width=Math.round(w*dpr);sceneCv.height=Math.round(h*dpr);
+  sctx.setTransform(dpr,0,0,dpr,0,0);
+  flightPerf.resizeCount++;
 }
 window.addEventListener("resize",fitScene);
-function updViewLabel(){$("btnView").textContent="GÖRÜŞ: "+(sceneView==="cockpit"?"KOKPİT":"KUYRUK");}
+if(typeof ResizeObserver!=="undefined")new ResizeObserver(fitScene).observe(sceneCv);
+function updViewLabel(){
+  $("btnView").textContent="GÖRÜŞ: "+({chase:"KUYRUK",cockpit:"KOKPİT",model:"MODEL"}[sceneView]);
+  sceneCv.style.touchAction=sceneView==="model"?"none":"auto";
+  $("modelInfo").textContent=sceneView==="model"?activeProfile.name+" · SÜRÜKLE: DÖNDÜR · TEKERLEK: ZOOM":activeProfile.name+" · dokusuz polygon";
+}
 updViewLabel();
-$("btnView").onclick=()=>{sceneView=(sceneView==="chase")?"cockpit":"chase";updViewLabel();};
+$("btnView").onclick=()=>{sceneView=sceneView==="chase"?"cockpit":sceneView==="cockpit"?"model":"chase";updViewLabel();};
+$("btnWire").onclick=()=>{
+  showWire=!showWire;$("btnWire").textContent="KENAR: "+(showWire?"AÇIK":"KAPALI");
+  $("btnWire").setAttribute("aria-pressed",String(showWire));
+};
+$("btnWire").setAttribute("aria-pressed","false");
+sceneCv.addEventListener("pointerdown",e=>{
+  if(sceneView!=="model")return;
+  orbitPointer={id:e.pointerId,x:e.clientX,y:e.clientY};
+  sceneCv.setPointerCapture(e.pointerId);e.preventDefault();
+});
+sceneCv.addEventListener("pointermove",e=>{
+  if(!orbitPointer||e.pointerId!==orbitPointer.id)return;
+  orbitAz+=(e.clientX-orbitPointer.x)*.008;
+  orbitEl=clamp(orbitEl+(orbitPointer.y-e.clientY)*.006,-1.20,1.35);
+  orbitPointer.x=e.clientX;orbitPointer.y=e.clientY;
+});
+for(const name of ["pointerup","pointercancel","lostpointercapture"])
+  sceneCv.addEventListener(name,e=>{if(orbitPointer?.id===e.pointerId)orbitPointer=null;});
+sceneCv.addEventListener("wheel",e=>{
+  if(sceneView!=="model")return;
+  orbitDist=clamp(orbitDist*Math.exp(Math.sign(e.deltaY)*.13),Math.max(13,activeProfile.dimensions.length*.8),Math.max(80,activeProfile.dimensions.length*6));
+  e.preventDefault();
+},{passive:false});
 
 const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/l,v[1]/l,v[2]/l];};
 const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -1110,27 +1744,37 @@ const LIT=norm([-0.35,0.5,0.78]);
 let cam={p:[0,0,10],L:[0,1,0],R:[1,0,0],U:[0,0,1],k:600,W:900,H:500};
 let acF=[0,1,0],acR=[1,0,0],acU=[0,0,1]; // uçak gövde çerçevesi (ileri/sağ/yukarı)
 function updateCam(){
-  const cp=Math.cos(S.pitch),sp=Math.sin(S.pitch);
-  const F=[cp*Math.sin(S.heading),cp*Math.cos(S.heading),sp];
+  const pose=visualPose||S;
+  const cp=Math.cos(pose.pitch),sp=Math.sin(pose.pitch);
+  const F=[cp*Math.sin(pose.heading),cp*Math.cos(pose.heading),sp];
   const R0=norm(cross3(F,[0,0,1]));
   const U0=norm(cross3(R0,F));
-  const cb=Math.cos(S.bank),sb=Math.sin(S.bank);
+  const cb=Math.cos(pose.bank),sb=Math.sin(pose.bank);
   acF=F;
   acR=[cb*R0[0]-sb*U0[0],cb*R0[1]-sb*U0[1],cb*R0[2]-sb*U0[2]];
   acU=[cb*U0[0]+sb*R0[0],cb*U0[1]+sb*R0[1],cb*U0[2]+sb*R0[2]];
-  const P=[S.x,S.y,S.z];
+  const P=[pose.x,pose.y,pose.z];
   let camP,look;
   if(sceneView==="chase"){
-    const Fh=norm([Math.sin(S.heading),Math.cos(S.heading),0]);
-    camP=[P[0]-Fh[0]*27,P[1]-Fh[1]*27,S.z+8];
+    const Fh=norm([Math.sin(pose.heading),Math.cos(pose.heading),0]);
+    const chaseDist=Math.max(27,activeProfile.dimensions.length*1.5);
+    camP=[P[0]-Fh[0]*chaseDist,P[1]-Fh[1]*chaseDist,pose.z+chaseDist*.3];
     look=[P[0]+F[0]*45,P[1]+F[1]*45,P[2]+F[2]*45];
+  }else if(sceneView==="model"){
+    const h=orbitDist*Math.cos(orbitEl),v=orbitDist*Math.sin(orbitEl);
+    look=[P[0]+acU[0]*.4,P[1]+acU[1]*.4,P[2]+acU[2]*.4];
+    camP=[look[0]+(-acF[0]*Math.cos(orbitAz)+acR[0]*Math.sin(orbitAz))*h+acU[0]*v,
+          look[1]+(-acF[1]*Math.cos(orbitAz)+acR[1]*Math.sin(orbitAz))*h+acU[1]*v,
+          look[2]+(-acF[2]*Math.cos(orbitAz)+acR[2]*Math.sin(orbitAz))*h+acU[2]*v];
   }else{
-    /* pilot göz hizası: kanopi bölgesi (l≈4.2, üst) */
-    camP=[P[0]+F[0]*4.2+acU[0]*0.62,P[1]+F[1]*4.2+acU[1]*0.62,P[2]+F[2]*4.2+acU[2]*0.62];
+    /* pilot eye point */
+    camP=[P[0]+F[0]*4.2+acU[0]*.62,P[1]+F[1]*4.2+acU[1]*.62,P[2]+F[2]*4.2+acU[2]*.62];
     look=[P[0]+F[0]*80,P[1]+F[1]*80,P[2]+F[2]*80+acU[2]*8];
   }
   const L=norm(sub3(look,camP));
-  cam={p:camP,L,R:acR,U:acU,k:sceneCv.height*1.15,W:sceneCv.width,H:sceneCv.height};
+  const R=sceneView==="model"?norm(cross3(L,acU)):acR;
+  const U=sceneView==="model"?norm(cross3(R,L)):acU;
+  cam={p:camP,L,R,U,k:sceneSize.h*(sceneView==="model"?1.28:1.15),W:sceneSize.w,H:sceneSize.h};
 }
 function proj(Q){
   const d=sub3(Q,cam.p);
@@ -1169,9 +1813,262 @@ function worldFace(list,rgb,stroke){
   if(rgb&&rgb.length===3)poly(list,shade(list,rgb),stroke);
   else poly(list,rgb,stroke);
 }
-function drawScene(){
-  fitScene();updateCam();
+/* Cached F-16C mesh. Camera-space projection avoids rebuilding world-space faces.
+   Depth-sort visible polygons; no textures, shaders, WebGL or per-frame mesh allocation. */
+let AIRCRAFT=FlightAircraft,aircraftScratch,aircraftTones,rotorVertexMap=[];
+function setupAircraftRenderCache(){
+  aircraftScratch={x:new Float32Array(AIRCRAFT.vertices.length),
+    y:new Float32Array(AIRCRAFT.vertices.length),z:new Float32Array(AIRCRAFT.vertices.length),faces:[],
+    entries:AIRCRAFT.faces.map((_,i)=>({i,depth:0}))};
+  aircraftTones=AIRCRAFT.palette.map(rgb=>Array.from({length:17},(_,i)=>{
+    const k=.55+i*.45/16;
+    return `rgb(${Math.round(rgb[0]*k)},${Math.round(rgb[1]*k)},${Math.round(rgb[2]*k)})`;
+  }));
+  rotorVertexMap=new Array(AIRCRAFT.vertices.length);
+  for(const rotor of AIRCRAFT.rotors||[])for(const id of rotor.indices)rotorVertexMap[id]=rotor;
+}
+setupAircraftRenderCache();
+function renderAircraft(){
+  const axes=[acF,acR,acU],camAxes=[cam.R,cam.U,cam.L];
+  const pose=visualPose||S;
+  const base=[pose.x-cam.p[0],pose.y-cam.p[1],pose.z-cam.p[2]];
+  const offsets=camAxes.map(axis=>dot3(base,axis));
+  const m=camAxes.map(axis=>axes.map(a=>dot3(a,axis)));
+  const sx=aircraftScratch.x,sy=aircraftScratch.y,sz=aircraftScratch.z;
+  for(let i=0;i<AIRCRAFT.vertices.length;i++){
+    const v=AIRCRAFT.vertices[i];let px=v[0],py=v[1],pz=v[2];
+    const rotor=rotorVertexMap[i];
+    if(rotor&&S.engine==='RUNNING'){
+      const a=(S.simTime+renderAlpha*STEP)*rotor.rate,c=Math.cos(a),s=Math.sin(a),pivot=rotor.pivot;
+      if(rotor.axis==='z'){
+        const dx=px-pivot[0],dy=py-pivot[1];px=pivot[0]+dx*c-dy*s;py=pivot[1]+dx*s+dy*c;
+      }else{
+        const dx=px-pivot[0],dz=pz-pivot[2];px=pivot[0]+dx*c-dz*s;pz=pivot[2]+dx*s+dz*c;
+      }
+    }
+    const x=offsets[0]+px*m[0][0]+py*m[0][1]+pz*m[0][2];
+    const y=offsets[1]+px*m[1][0]+py*m[1][1]+pz*m[1][2];
+    const z=offsets[2]+px*m[2][0]+py*m[2][1]+pz*m[2][2];
+    sz[i]=z;
+    sx[i]=z>3?cam.W/2+cam.k*x/z:NaN;
+    sy[i]=z>3?cam.H/2-cam.k*y/z:NaN;
+  }
+  const localLight=axes.map(a=>dot3(a,LIT));
+  const visible=aircraftScratch.faces;
+  visible.length=0;
+  for(let i=0;i<AIRCRAFT.faces.length;i++){
+    const f=AIRCRAFT.faces[i];
+    if(f.gear&&!S.onGround)continue;
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity,depth=0,near=false;
+    for(const id of f.ids){
+      if(sz[id]<=3){near=true;break;}
+      const x=sx[id],y=sy[id];depth+=sz[id];
+      if(x<minX)minX=x;if(x>maxX)maxX=x;
+      if(y<minY)minY=y;if(y>maxY)maxY=y;
+    }
+    if(near||maxX<0||minX>cam.W||maxY<0||minY>cam.H)continue;
+    const entry=aircraftScratch.entries[i];entry.depth=depth/f.ids.length;visible.push(entry);
+  }
+  visible.sort((a,b)=>b.depth-a.depth);
+  for(const entry of visible){
+    const f=AIRCRAFT.faces[entry.i],ids=f.ids;
+    const n=f.normal,l=Math.abs(n[0]*localLight[0]+n[1]*localLight[1]+n[2]*localLight[2]);
+    const tone=Math.max(0,Math.min(16,Math.round(l*16)));
+    sctx.beginPath();sctx.moveTo(sx[ids[0]],sy[ids[0]]);
+    for(let i=1;i<ids.length;i++)sctx.lineTo(sx[ids[i]],sy[ids[i]]);
+    sctx.closePath();
+    sctx.fillStyle=aircraftTones[f.material][tone];sctx.fill();
+    if(showWire){sctx.strokeStyle='rgba(9,20,26,.55)';sctx.lineWidth=.55;sctx.stroke();}
+  }
+  flightPerf.faces=AIRCRAFT.faces.length;
+  flightPerf.drawnFaces=visible.length;
+}
+
+/* Static faceted tanker aircraft; vertices and face order are cached once. */
+const TANKER=FlightTankerMesh;
+const tankerScratch={x:new Float32Array(TANKER.vertices.length),y:new Float32Array(TANKER.vertices.length),
+  z:new Float32Array(TANKER.vertices.length),entries:TANKER.faces.map((_,i)=>({i,depth:0})),visible:[]};
+const tankerTones=TANKER.palette.map(rgb=>Array.from({length:12},(_,i)=>{
+  const k=.45+i*.54/11;return `rgb(${Math.round(rgb[0]*k)},${Math.round(rgb[1]*k)},${Math.round(rgb[2]*k)})`;
+}));
+function renderTanker(){
+  flightPerf.tankerFaces=0;
+  if(!S.mission?.active||sceneView==="model")return;
+  const T=S.mission.tanker;
+  if(Math.hypot(T.x-S.x,T.y-S.y,T.z-S.z)>18000)return;
+  const h=T.heading,sn=Math.sin(h),cs=Math.cos(h);
+  const fx=sn,fy=cs,rx=cs,ry=-sn;
+  const X=tankerScratch.x,Y=tankerScratch.y,Z=tankerScratch.z;
+  for(let i=0;i<TANKER.vertices.length;i++){
+    const v=TANKER.vertices[i];const wx=T.x+v[0]*fx+v[1]*rx-cam.p[0];
+    const wy=T.y+v[0]*fy+v[1]*ry-cam.p[1],wz=T.z+v[2]-cam.p[2];
+    const z=wx*cam.L[0]+wy*cam.L[1]+wz*cam.L[2];Z[i]=z;
+    X[i]=z>3?cam.W/2+cam.k*(wx*cam.R[0]+wy*cam.R[1]+wz*cam.R[2])/z:NaN;
+    Y[i]=z>3?cam.H/2-cam.k*(wx*cam.U[0]+wy*cam.U[1]+wz*cam.U[2])/z:NaN;
+  }
+  const visible=tankerScratch.visible;visible.length=0;
+  for(let i=0;i<TANKER.faces.length;i++){
+    const ids=TANKER.faces[i].ids;let depth=0,skip=false,minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    for(const id of ids){
+      if(Z[id]<3){skip=true;break;}
+      depth+=Z[id];minX=Math.min(minX,X[id]);maxX=Math.max(maxX,X[id]);
+      minY=Math.min(minY,Y[id]);maxY=Math.max(maxY,Y[id]);
+    }
+    if(skip||maxX<0||minX>cam.W||maxY<0||minY>cam.H)continue;
+    const entry=tankerScratch.entries[i];entry.depth=depth/ids.length;visible.push(entry);
+  }
+  visible.sort((a,b)=>b.depth-a.depth);
+  flightPerf.tankerFaces=visible.length;
+  for(const entry of visible){
+    const f=TANKER.faces[entry.i],ids=f.ids,n=f.normal;
+    const lit=Math.abs((n[0]*fx+n[1]*rx)*LIT[0]+(n[0]*fy+n[1]*ry)*LIT[1]+n[2]*LIT[2]);
+    const tone=Math.round(Math.min(11,lit*11));
+    sctx.beginPath();sctx.moveTo(X[ids[0]],Y[ids[0]]);
+    for(let i=1;i<ids.length;i++)sctx.lineTo(X[ids[i]],Y[ids[i]]);
+    sctx.closePath();sctx.fillStyle=tankerTones[f.material][tone];sctx.fill();
+    if(showWire){sctx.strokeStyle="#1b2a32";sctx.lineWidth=.5;sctx.stroke();}
+  }
+}
+/* Combat world geometry is baked at mission start; no textures or external 3D engine. */
+const combatBaseFaces=FlightCombatVisuals.makeBase();
+function renderCombatWorld(){
+  if(sceneView==="model")return;
+  const near=(p,r)=>Math.hypot(p.x-S.x,p.y-S.y)<r;
+  if(Math.hypot(S.x,S.y)<4400)for(const f of combatBaseFaces)worldFace(f.points,f.rgb);
+  if(!combat)return;
+  if(combat.type==="ground"&&combatGroundMeshes){
+    for(const t of combat.targets){
+      if(!near(t,8500))continue;
+      const faces=t.health>0?combatGroundMeshes[t.id]:combatRubbleMeshes[t.id];
+      for(const f of faces)worldFace(f.points,f.rgb);
+    }
+  }
+  if(combat.enemy?.health>0&&Math.hypot(combat.enemy.x-S.x,combat.enemy.y-S.y)<6500){
+    for(const f of FlightCombatVisuals.fighterFaces(combat.enemy))worldFace(f.points,f.rgb);
+  }
+  for(const m of combat.missiles){
+    if(near(m,6500))for(const f of FlightCombatVisuals.missileFaces(m,false))worldFace(f.points,f.rgb);
+  }
+  for(const m of combat.threats){
+    if(near(m,6500))for(const f of FlightCombatVisuals.missileFaces(m,true))worldFace(f.points,f.rgb);
+  }
+  for(const fx of combat.effects){
+    if(!near(fx,5500))continue;
+    const size=15*(1-fx.ttl)+3;
+    worldFace([[fx.x-size,fx.y-size,fx.z+size],[fx.x+size,fx.y-size,fx.z+size],
+      [fx.x+size,fx.y+size,fx.z+size],[fx.x-size,fx.y+size,fx.z+size]],[255,152,48]);
+  }
+}
+function renderCombatHud(){
+  if(!combat||sceneView==="model")return;
+  const guide=FlightCombat.guidance(combat,S),t=FlightCombat.selected(combat);
   const W=cam.W,H=cam.H;
+  sctx.save();sctx.textAlign="center";sctx.lineWidth=2;
+  sctx.font="bold 12px Consolas,monospace";
+  const danger=combat.threats.length>0;
+  sctx.fillStyle=danger?"#ff5e63":"#ffd09b";
+  sctx.fillText(combat.type==="ground"?"STRIKE / "+combat.phase:"DOGFIGHT / "+combat.phase,W/2,18);
+  if(danger){sctx.fillStyle="#ff6565";sctx.fillText("MISSILE WARNING · F = FLARE",W/2,36);}
+  if(["COMPLETE","VICTORY","FAILED"].includes(combat.phase)){
+    sctx.font="bold 20px Consolas,monospace";
+    sctx.fillStyle=combat.phase==="FAILED"?"#ff6060":"#9eff3d";
+    sctx.fillText(combat.phase==="FAILED"?"GÖREV BAŞARISIZ":"GÖREV BAŞARILI",W/2,H*.30);
+  }
+  if(t){
+    const q=proj([t.x,t.y,t.z]);sctx.fillStyle=combat.locked?"#9eff3d":"#ff6f6f";
+    sctx.strokeStyle=sctx.fillStyle;
+    if(q&&q[0]>12&&q[0]<W-12&&q[1]>26&&q[1]<H-28){
+      const x=q[0],y=q[1],r=13;
+      sctx.strokeRect(x-r,y-r,r*2,r*2);
+      sctx.fillText((combat.locked?"LOCK ":"TGT ")+t.id+" · "+guide.range+" m",x,Math.max(46,y-19));
+    }else{sctx.fillText("HEDEF "+Math.round(guide.bearing)+"° · "+guide.range+" m",W/2,H-45);}
+  }else if(combat.phase==="RTB"){
+    sctx.fillStyle="#9eff3d";sctx.fillText("RTB · ANA ÜS · "+guide.range+" m",W/2,H-45);
+  }
+  sctx.restore();
+}
+function tankerHudCue(){
+  if(!S.mission?.active||sceneView==="model")return;
+  const m=S.mission,T=m.tanker,W=cam.W,H=cam.H;
+  const pt=proj([T.x,T.y,T.z]);
+  sctx.save();sctx.fillStyle=m.connected?"#9eff3d":"#7fd8ff";
+  sctx.strokeStyle=sctx.fillStyle;sctx.lineWidth=1.4;
+  if(pt){
+    const x=clamp(pt[0],18,W-18),y=clamp(pt[1],30,H-25);
+    sctx.beginPath();sctx.moveTo(x,y-11);sctx.lineTo(x+12,y);sctx.lineTo(x,y+11);
+    sctx.lineTo(x-12,y);sctx.closePath();sctx.stroke();
+    sctx.font="bold 11px Consolas,monospace";sctx.textAlign="center";
+    sctx.fillText(m.connected?"KC-135 · CONTACT":"KC-135 · "+Math.round(S.refuelGuidance?.distanceToTanker||0)+" m",x,Math.max(14,y-17));
+  }else{
+    sctx.textAlign="center";sctx.font="bold 11px Consolas";
+    sctx.fillText("KC-135 RADAR · "+Math.round(S.refuelGuidance?.distanceToTanker||0)+" m · "+Math.round(S.refuelGuidance?.bearingDeg||0)+"°",W/2,42);
+  }
+  sctx.restore();
+}
+// Fixed small mesh footprint: each hoop uses 16 quadrilateral panels (no textures).
+function renderObstacleCourse(){
+  if(!course||sceneView==='model')return;
+  for(let i=course.index;i<Math.min(course.objects.length,course.index+5);i++){
+    const g=course.objects[i];
+    if(Math.hypot(g.x-S.x,g.y-S.y)>2300)continue;
+    if(g.type==='ring'){
+      const n=16,r=g.radius,th=1.7;
+      for(let j=0;j<n;j++){
+        const a=j*2*Math.PI/n,b=(j+1)*2*Math.PI/n;
+        const p=(ang,rad)=>[g.x+Math.cos(ang)*rad,g.y,g.z+Math.sin(ang)*rad];
+        const rgb=j%2?[38,187,235]:[66,218,246];
+        worldFace([p(a,r+th),p(b,r+th),p(b,r),p(a,r)],rgb);
+      }
+    }else{
+      const xs=g.type==='gate'?[g.x-g.halfWidth,g.x+g.halfWidth]:[g.x];
+      for(const px of xs){
+        const w=1.15,h=g.height;
+        const seg=Math.min(6,Math.ceil(h/12));
+        for(let k=0;k<seg;k++){
+          const z0=k*h/seg,z1=(k+1)*h/seg;
+          const rgb=k%2?[224,173,36]:[240,217,77];
+          worldFace([[px-w,g.y-w,z0],[px+w,g.y-w,z0],[px+w,g.y-w,z1],[px-w,g.y-w,z1]],rgb);
+          worldFace([[px+w,g.y-w,z0],[px+w,g.y+w,z0],[px+w,g.y+w,z1],[px+w,g.y-w,z1]],rgb);
+        }
+      }
+    }
+  }
+}
+function renderCourseHud(){
+  if(!course||sceneView==='model')return;
+  const g=course.objects[course.index];
+  sctx.save();sctx.font='bold 12px Consolas,monospace';sctx.textAlign='center';
+  sctx.fillStyle='#7fd8ff';
+  sctx.fillText('POLYGON PARKUR · '+course.passed+'/'+course.objects.length+' · '+course.score+' PUAN',cam.W/2,58);
+  if(g){
+    const target=proj([g.x,g.y,g.z]);
+    if(target){
+      sctx.strokeStyle='#7fd8ff';sctx.strokeRect(target[0]-9,target[1]-9,18,18);
+    }
+    sctx.fillText('#'+g.id+' · '+(g.type==='ring'?'HALKA':g.type==='gate'?'ORTADAN':'DİREK '+(g.side<0?'SOL':'SAĞ'))+
+      ' · '+Math.max(0,Math.round(g.y-S.y))+' m',cam.W/2,78);
+  }else{sctx.fillText('PARKUR TAMAMLANDI',cam.W/2,78);}
+  sctx.restore();
+}
+function drawScene(){
+  const renderStart=performance.now();
+  updateCam();
+  const W=cam.W,H=cam.H;
+  // Inspection mode: neutral studio lighting and no scenery to obscure geometry.
+  if(sceneView==="model"){
+    const bg=sctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,"#0b1721");bg.addColorStop(1,"#31505a");
+    sctx.fillStyle=bg;sctx.fillRect(0,0,W,H);
+    sctx.lineWidth=1;sctx.strokeStyle="rgba(140,188,201,.12)";
+    for(let x=W*.5%70;x<W;x+=70){sctx.beginPath();sctx.moveTo(x,0);sctx.lineTo(x,H);sctx.stroke();}
+    for(let y=H*.5%70;y<H;y+=70){sctx.beginPath();sctx.moveTo(0,y);sctx.lineTo(W,y);sctx.stroke();}
+    renderAircraft();
+    flightPerf.frames++;
+    const ms=performance.now()-renderStart;
+    flightPerf.renderMs=ms;
+    flightPerf.renderAvgMs=flightPerf.frames===1?ms:flightPerf.renderAvgMs*.93+ms*.07;
+    return;
+  }
   /* gökyüzü */
   const g=sctx.createLinearGradient(0,0,0,H);
   g.addColorStop(0,"#0a2030");g.addColorStop(0.55,"#2a5a80");g.addColorStop(1,"#77a8c4");
@@ -1191,7 +2088,8 @@ function drawScene(){
   poly([[-40,-224,0],[40,-224,0],[40,-218,0],[-40,-218,0]],"#565b60");
   for(let y=-160;y<2600;y+=140)poly([[-2.2,y,0.05],[2.2,y,0.05],[2.2,y+70,0.05],[-2.2,y+70,0.05]],"#b8bdbd");
   /* binalar (uzak→ yakın sıralı) */
-  const bds=[...BUILDINGS].sort((a,b)=>Math.hypot(b.x-S.x,b.y-S.y)-Math.hypot(a.x-S.x,a.y-S.y));
+  const pose=visualPose||S;
+  const bds=BUILDINGS.slice().sort((a,b)=>Math.hypot(b.x-pose.x,b.y-pose.y)-Math.hypot(a.x-pose.x,a.y-pose.y));
   for(const b of bds){
     const x0=b.x-b.w/2,x1=b.x+b.w/2,y0=b.y-b.d/2,y1=b.y+b.d/2;
     const v={pNw:[x0,y0,b.h],pNe:[x1,y0,b.h],pSe:[x1,y1,b.h],pSw:[x0,y1,b.h],
@@ -1204,56 +2102,27 @@ function drawScene(){
     worldFace([v.pNw,v.pNe,v.pSe,v.pSw],[Math.min(255,c[0]+18),Math.min(255,c[1]+18),Math.min(255,c[2]+18)]);
   }
   /* tepeler (koni) — uzaktan yakına */
-  const hs=[...HILLS].sort((a,b)=>Math.hypot(b.x-S.x,b.y-S.y)-Math.hypot(a.x-S.x,a.y-S.y));
+  const hs=HILLS.slice().sort((a,b)=>Math.hypot(b.x-pose.x,b.y-pose.y)-Math.hypot(a.x-pose.x,a.y-pose.y));
   for(const hh of hs){
     const ring=[];for(let i=0;i<8;i++){const a=i/8*Math.PI*2;
       ring.push([hh.x+Math.cos(a)*hh.r,hh.y+Math.sin(a)*hh.r,0]);}
     const apex=[hh.x,hh.y,hh.h];
     for(let i=0;i<8;i++)worldFace([ring[i],ring[(i+1)%8],apex],hh.c);
   }
-  /* --- F-16 mesh (yalnız kuyruk/chase görüşünde) --- */
-  const P=(lx,ly,lz)=>[S.x+acF[0]*lx+acR[0]*ly+acU[0]*lz,
-                       S.y+acF[1]*lx+acR[1]*ly+acU[1]*lz,
-                       S.z+acF[2]*lx+acR[2]*ly+acU[2]*lz];
-  if(sceneView==="chase"){
-  const GREY=[150,162,168],GREY2=[128,140,146],TIP=[186,196,200];
-  const st=[[7.3,0.28,0.18,0.25],[6.2,0.55,0.42,0.28],[4.6,0.62,0.55,0.30],[2.0,0.72,0.60,0.28],
-    [-0.6,0.78,0.55,0.25],[-3.0,0.70,0.50,0.22],[-5.0,0.58,0.44,0.20],[-6.5,0.40,0.30,0.16]];
-  const rings=st.map(s=>{const q=[];
-    for(let i=0;i<6;i++){const th=i/6*Math.PI*2;
-      q.push(P(s[0],Math.cos(th)*s[1],Math.sin(th)*s[2]+s[3]));}
-    return q;});
-  for(let s=0;s<rings.length-1;s++)for(let i=0;i<6;i++){
-    const topFace=i<2||i>=4;
-    worldFace([rings[s][i],rings[s+1][i],rings[s+1][(i+1)%6],rings[s][(i+1)%6]],topFace?GREY:GREY2);
-  }
-  /* kokpit kanopi (üst yarı halka) */
-  const cst=[[2.7,0.26,0.52,0.30],[3.4,0.30,0.62,0.30],[4.7,0.27,0.55,0.30],[5.7,0.18,0.32,0.30]];
-  const crings=cst.map(s0=>{const q=[];
-    for(let i=0;i<=4;i++){const th=Math.PI*(1-i/4);
-      q.push(P(s0[0],Math.cos(th)*s0[1],Math.sin(th)*s0[2]+s0[3]));}
-    return q;});
-  for(let s=0;s<crings.length-1;s++)for(let i=0;i<4;i++)
-    worldFace([crings[s][i],crings[s+1][i],crings[s+1][i+1],crings[s][i+1]],[45,84,102]);
-  /* kanatlar */
-  for(const sgn of [1,-1]){
-    worldFace([P(2.8,sgn*0.5,0.36),P(0.9,sgn*5.1,0.18),P(-0.6,sgn*5.1,0.15),P(0.5,sgn*0.5,0.12)],TIP);
-    worldFace([P(2.8,sgn*0.5,-0.05),P(0.5,sgn*0.5,-0.08),P(-0.6,sgn*5.1,-0.02),P(0.9,sgn*5.1,-0.02)],GREY2);
-  }
-  /* kuyrkJü stabilizatörler */
-  for(const sgn of [1,-1])
-    worldFace([P(-2.7,sgn*0.45,0.3),P(-4.4,sgn*2.15,0.1),P(-5.15,sgn*2.15,0.07),P(-4.2,sgn*0.45,0.05)],GREY);
-  /* dikey kuyruk */
-  worldFace([P(-2.4,0,0.55),P(-5.1,0,0.55),P(-5.7,0,2.6),P(-3.1,0,2.8)],GREY);
-  worldFace([P(-2.4,0.09,0.55),P(-5.1,0.09,0.55),P(-5.7,0.09,2.6),P(-3.1,0.09,2.8)],TIP);
-  /* motor nozulu karanlık */
-  const nr=[];for(let i=0;i<6;i++){const th=i/6*Math.PI*2;
-    nr.push(P(-6.5,Math.cos(th)*0.36,Math.sin(th)*0.26+0.16));}
-  const nr2=nr.map(q=>[q[0]-acF[0]*0.7,q[1]-acF[1]*0.7,q[2]-acF[2]*0.7]);
-  for(let i=0;i<6;i++)worldFace([nr[i],nr[(i+1)%6],nr2[(i+1)%6],nr2[i]],[52,58,62]);
-  /* konum gölgesi */
-  if(S.z<400){const sh=[];for(let i=0;i<10;i++){const a=i/10*Math.PI*2;
-    sh.push([S.x+Math.cos(a)*7,S.y+Math.sin(a)*7,0.1]);}poly(sh,"rgba(10,14,10,0.35)");}
+  renderObstacleCourse();
+  /* KC-135 flying in the same world, its boom is a stylized polygon element. */
+  renderTanker();
+  renderCombatWorld();
+  /* --- Polygon aircraft: chase and interactive model camera --- */
+  if(sceneView!=="cockpit"){
+    if(S.z<400){
+      const sh=[];for(let i=0;i<10;i++){
+        const a=i/10*Math.PI*2;
+        sh.push([pose.x+Math.cos(a)*7,pose.y+Math.sin(a)*7,.1]);
+      }
+      poly(sh,"rgba(10,14,10,0.24)");
+    }
+    renderAircraft();
   }else{
     /* kokpit: tasarımdan bağımsız kanopi çerçevesi */
     sctx.strokeStyle="rgba(30,44,54,0.95)";sctx.lineWidth=7;
@@ -1284,35 +2153,75 @@ function drawScene(){
   }else{
     sctx.font="600 12px Consolas,monospace";sctx.textAlign="left";
     sctx.globalAlpha=0.75;
-    sctx.fillText("KUYRU K GÖRÜŞ — köpik için düğme",14,H-12);sctx.globalAlpha=1;
+    sctx.fillText(activeProfile.name.toUpperCase()+" · DOKUSUZ POLYGON",14,H-12);sctx.globalAlpha=1;
   }
+  tankerHudCue();
+  renderCombatHud();
+  renderCourseHud();
   if(S.stall){sctx.fillStyle="#ff4d4d";sctx.font="700 16px Consolas";sctx.textAlign="center";
     sctx.fillText("STALL",W/2,H*0.3);}
+  flightPerf.frames++;
+  const ms=performance.now()-renderStart;
+  flightPerf.renderMs=ms;
+  flightPerf.renderAvgMs=flightPerf.frames===1?ms:flightPerf.renderAvgMs*.93+ms*.07;
 }
 
 /* ================= RAF LOOP ================= */
-let lastTS=performance.now(),acc=0,frame=0;
+let lastTS=performance.now(),acc=0,frame=0,renderAlpha=0,lastDrawTS=0;
+let targetRenderFPS=60;
+document.getElementById('perfMode').addEventListener('change',event=>{
+  targetRenderFPS=Number(event.target.value);lastDrawTS=0;
+});
+const poseKeys=['x','y','z','pitch','bank','heading'];
+function interpolatedPose(alpha){
+  if(!previousVisual)return S;
+  const pose={};
+  for(const key of poseKeys){
+    let diff=S[key]-previousVisual[key];
+    if(key==='heading')diff=Math.atan2(Math.sin(diff),Math.cos(diff));
+    pose[key]=previousVisual[key]+diff*alpha;
+  }
+  return pose;
+}
+let fpsWindowStart=lastTS,fpsWindowFrames=0,nextPanelAt=lastTS;
 function raf(now){
-  const dtR=Math.min((now-lastTS)/1000,0.25);lastTS=now;
-  acc+=dtR;
-  let guard=0;
-  while(acc>=STEP&&guard++<10){step(STEP);acc-=STEP;}
-  if(acc>STEP*4)acc=0;
+  const dtR=Math.min(Math.max(0,(now-lastTS)/1000),.25);lastTS=now;
+  if(S.running){
+    acc+=dtR;
+    let guard=0;
+    while(acc>=STEP&&guard++<10){step(STEP);acc-=STEP;}
+    if(acc>STEP*4)acc=0;
+  }else acc=0;
   frame++;
-  if(frame%2===0){drawScene();drawDash();updHud();updQuick();updTele();}
-  if(frame%30===0)fpsCount=Math.round(1/Math.max(dtR,0.001))+" fps";
-  $("fps").textContent=fpsCount;
-  if(S.record.on&&frame%10===0)$("recInfo").textContent="KAYIT ● "+S.record.samples.length+" örnek";
+  // Display-independent simulation step + render interpolation.  60 is a TARGET,
+  // never a hard promise: requestAnimationFrame is OS/browser/vsync controlled.
+  renderAlpha=Math.max(0,Math.min(1,acc/STEP));
+  if(!lastDrawTS||!targetRenderFPS||now-lastDrawTS>=1000/targetRenderFPS-1.4){
+    visualPose=interpolatedPose(renderAlpha);
+    drawScene();drawDash();lastDrawTS=now;
+  }
+  // Throttle cockpit/DOM updates to <= 30Hz, independent of screen refresh rate.
+  if(now>=nextPanelAt){updHud();updQuick();updTele();updateCombatUI();nextPanelAt=now+1000/30;}
+  fpsWindowFrames++;
+  if(now-fpsWindowStart>=1000){
+    const fps=Math.round(fpsWindowFrames*1000/(now-fpsWindowStart));
+    $("fps").textContent=`${fps} RAF · ${Math.round(flightPerf.frames*1000/Math.max(1,now-fpsWindowStart))} DRAW · 3B ${flightPerf.renderAvgMs.toFixed(1)} ms`;
+    document.getElementById('fpsFill').style.width=Math.round(Math.min(100,fps/60*100))+'%';
+    flightPerf.frames=0;
+    fpsWindowFrames=0;fpsWindowStart=now;
+  }
+  if(S.record.on&&frame%10===0)$("recInfo").textContent="KAYIT ● "+S.record.samples.length+"/"+MAX_RECORD_SAMPLES;
   requestAnimationFrame(raf);
 }
 /* init */
+requestAnimationFrame(raf);
 fitDash();fitScene();
 resetSim();
 updButtons();
 renderPartsQuick();
 updRecButtons();
-log("INFO","KNOX FALCON motoru hazır — gaz %35, motor RUNNING · W/S pitch · A/D roll · Q/E rudder","gn");
-log("INFO","Kalkış: gaz %100 → 55 m/s → S tuşu (burun yukarı). Roket için 12 m alt gerekiyor.","am");
+log("INFO","KNOX FALCON motoru hazır — gaz %0, motor RUNNING (rölanti) · W/S pitch · A/D roll · Q/E rudder","gn");
+log("INFO","Kalkış: gaz %100 → kalkış kaldırması sağlanınca S tuşu. Havada NUM1–9 manevra, Esc iptal.","am");
 </script>
 </body>
 </html>
